@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Escala Pro — Gerador de Escalas</title>
+<!-- ==========================================================================
+     ESCALA PRO — plataforma de escalas para coordenadores (multi-equipe)
+     - Turnos, funções e licenças 100% editáveis (com padrões prontos).
+     - Motor automático: cobertura por dia (semana × fds/feriado), preferência
+       dia/noite (só / mais / equilibrado), justiça de fins de semana, folga pós-12h.
+     - Plano por nº de equipes (1→R$49,90 … 5→R$99,90). Demo local = 1 equipe.
+     - Stack: HTML único + React 18 + Supabase (opcional) + SheetJS. Sem build.
+     Para ligar a nuvem: preencha SUPABASE_URL / SUPABASE_ANON_KEY abaixo.
+     ========================================================================== -->
+<script>
+  const SUPABASE_URL = "";
+  const SUPABASE_ANON_KEY = "";
+  const PAY_ENDPOINT = ""; // Worker que cria o Pix (ex.: https://escala-worker.../pix)
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#eef2f3;--surface:#fff;--ink:#0e1f26;--muted:#5c6f77;--line:#d7e0e2;--teal:#0d6b6e;--teal-d:#095255;
+ --dia:#b45309;--dia-bg:#fef3c7;--noite:#3730a3;--noite-bg:#e0e7ff;--curto:#0369a1;--curto-bg:#e0f2fe;
+ --f:#64748b;--f-bg:#eef2f5;--lic:#7c3aed;--lic-bg:#ede9fe;--fe:#0f766e;--fe-bg:#ccfbf1;--hol:#dc2626;--hol-bg:#fde8e8;
+ --ok:#15803d;--ok-bg:#dcfce7;--warn:#b45309;--warn-bg:#fef3c7;--bad:#b91c1c;--bad-bg:#fee2e2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.4}
+button{font-family:inherit;cursor:pointer}input,select{font-family:inherit;font-size:13px}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1560px;margin:0 auto;padding:18px}
+.topbar{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-bottom:14px;flex-wrap:wrap}
+.logo-slot{width:60px;height:60px;flex:none;border:2px dashed var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafa;cursor:pointer}
+.logo-slot:hover{border-color:var(--teal)}.logo-slot img{width:100%;height:100%;object-fit:contain}.logo-slot span{font-size:10px;color:var(--muted)}
+.brand{flex:1;min-width:200px}.brand .unit{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:17px;border:none;background:transparent;color:var(--ink);width:100%;padding:2px 0}
+.brand .unit:focus{outline:none;border-bottom:1px solid var(--teal)}.brand .title{font-size:11px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.badge{font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.badge.demo{background:var(--warn-bg);color:var(--warn)}.badge.live{background:var(--ok-bg);color:var(--ok)}.badge.lock{background:var(--bad-bg);color:var(--bad)}
+.actions{display:flex;gap:7px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 13px;border-radius:9px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--teal);color:var(--teal-d)}.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}.btn.primary:hover{background:var(--teal-d)}
+.btn.ghost{color:var(--muted)}.btn.ghost:hover{color:var(--bad);border-color:var(--bad)}.btn.sm{padding:5px 9px;font-size:12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.tab{border:1px solid var(--line);background:#fff;padding:8px 14px;border-radius:999px;font-weight:600;font-size:13px}
+.tab.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.panel h2{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;align-items:center;gap:10px}
+.panel h2 .sp{flex:1}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}.field label{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.field input,.field select{border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff}.field input{width:70px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--teal)}
+.navbtn{border:1px solid var(--line);background:#fff;width:34px;height:34px;border-radius:9px;font-size:18px}.mlabel{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;min-width:170px;text-align:center}
+.stat{background:#f1f6f6;border:1px solid var(--line);border-radius:10px;padding:7px 12px;min-width:90px}.stat .k{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}.stat .v{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px;color:var(--teal-d)}
+.toggle{display:flex;align-items:center;gap:7px;font-size:13px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chipx{display:inline-flex;align-items:center;gap:4px;background:var(--hol-bg);border:1px solid #f0c9c9;color:var(--hol);border-radius:20px;padding:3px 4px 3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700}
+.chipx button{border:none;background:transparent;color:var(--hol);font-size:15px;line-height:1;padding:0 4px}
+table.tb{width:100%;border-collapse:collapse;font-size:13px}.tb th{text-align:left;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:5px 7px;border-bottom:1px solid var(--line)}
+.tb td{padding:4px 7px;border-bottom:1px solid var(--line)}.tb input,.tb select{border:1px solid var(--line);border-radius:7px;padding:5px 7px;background:#fff}
+.tb input.nm{width:100%;min-width:140px}.tb input.sm{width:62px;text-align:center}.tb input.code{width:64px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;font-weight:700}
+.tb input:focus,.tb select:focus{outline:none;border-color:var(--teal)}.tb .alvo{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--teal-d)}
+.cov{border-collapse:collapse;font-size:12px}.cov th,.cov td{border:1px solid var(--line);padding:4px 6px;text-align:center}.cov th{background:#f1f6f6;font-size:10px;text-transform:uppercase;color:var(--muted)}
+.cov input{width:52px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:4px}
+.group{border:1px solid var(--line);border-radius:10px;padding:10px 12px}.group.hl{border-color:#f0c9c9;background:#fffafa}
+.group .glab{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--teal-d);margin-bottom:8px}.group.hl .glab{color:var(--hol)}
+.addrow{display:flex;gap:8px;margin-top:10px}.addrow input{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 11px}.addrow input:focus{outline:none;border-color:var(--teal)}
+.grid-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:#fff}
+table.sched{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+.sched th,.sched td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;text-align:center;white-space:nowrap}
+.sched thead th{position:sticky;top:0;background:#f1f6f6;z-index:2;font-weight:600;padding:4px;color:var(--muted)}
+.sched th.wknd,.sched td.wknd{background:#f8fafa}.sched th.hol,.sched td.hol{background:var(--hol-bg)}.sched th.hol .dnum{color:var(--hol)}
+.sched th.dnum{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);min-width:34px}.sched th.dwd{font-size:9px;text-transform:uppercase;font-weight:700}.sched th .fer{font-size:8px;font-weight:700;color:var(--hol)}
+.name-col{position:sticky;left:0;background:#fff;z-index:1;text-align:left!important;padding:4px 10px!important;min-width:180px;border-right:2px solid var(--line)!important}
+thead .name-col{z-index:3;background:#f1f6f6}.nm-main{font-weight:600;font-size:12px;line-height:1.2}.nm-tags{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-top:2px}
+.tot-col{position:sticky;right:0;background:#fff;z-index:1;border-left:2px solid var(--line)!important;min-width:150px}thead .tot-col{z-index:3;background:#f1f6f6}
+.cell-sel{border:none;background:transparent;width:100%;height:36px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;cursor:pointer;-webkit-appearance:none;appearance:none;color:var(--ink)}
+.cell-sel:focus{outline:2px solid var(--teal);outline-offset:-2px}
+.k-dia{background:var(--dia-bg);color:var(--dia)}.k-noite{background:var(--noite-bg);color:var(--noite)}.k-curto{background:var(--curto-bg);color:var(--curto)}
+.k-F{background:var(--f-bg);color:var(--f)}.k-FE{background:var(--fe-bg);color:var(--fe)}.k-lic{background:var(--lic-bg);color:var(--lic)}
+.tot-wrap{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 12px;height:36px}.tot-h{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px}
+.pill{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;min-width:44px;text-align:center}
+.p-ok{background:var(--ok-bg);color:var(--ok)}.p-warn{background:var(--warn-bg);color:var(--warn)}.p-bad{background:var(--bad-bg);color:var(--bad)}
+tfoot td{background:#f8fafa;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--muted);height:24px;font-size:11px}
+tfoot .cov-lbl{text-align:right!important;padding-right:10px!important;color:var(--ink);font-family:Inter,sans-serif;font-weight:600;font-size:11px}tfoot .cov-lbl small{font-family:'JetBrains Mono',monospace;color:var(--muted)}
+tfoot td.under{background:var(--bad-bg);color:var(--bad)}
+.adv-list{display:flex;flex-direction:column;gap:8px}.adv{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.45;padding:2px 0 2px 11px;border-left:3px solid var(--line)}
+.adv-ic{font-weight:700;flex:none}.adv-crit{border-color:var(--bad)}.adv-crit .adv-ic{color:var(--bad)}.adv-warn{border-color:var(--warn)}.adv-warn .adv-ic{color:var(--warn)}
+.adv-ok{border-color:var(--ok)}.adv-ok .adv-ic{color:var(--ok)}.adv-info{border-color:var(--teal)}.adv-info .adv-ic{color:var(--teal)}
+.bal-row{display:grid;grid-template-columns:230px 1fr 130px;gap:12px;align-items:center;margin-bottom:9px}.bal-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{position:relative;height:22px;background:#f1f6f6;border-radius:6px;overflow:hidden;border:1px solid var(--line)}.bar-fill{position:absolute;left:0;top:0;bottom:0}.bar-target{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.bar-info{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted);align-items:center}.legend span{display:inline-flex;align-items:center;gap:5px}
+.chip{min-width:28px;height:18px;padding:0 4px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:10px;display:inline-flex;align-items:center;justify-content:center}
+.empty{padding:26px;text-align:center;color:var(--muted)}.hint{font-size:12px;color:var(--muted);margin-top:8px}.file-in{display:none}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.plan{border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}.plan.cur{border-color:var(--teal);background:#f1f6f6}
+.plan .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px}.plan .p{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:20px;color:var(--teal-d);margin:6px 0}.plan .s{font-size:11px;color:var(--muted)}
+.overlay{position:fixed;inset:0;background:rgba(14,31,38,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal{background:#fff;border-radius:16px;padding:22px;max-width:760px;width:100%;max-height:90vh;overflow:auto}
+@media print{@page{size:landscape;margin:8mm}body{background:#fff}.noprint{display:none!important}.wrap{max-width:none;padding:0}.grid-scroll{overflow:visible;border:none}.sched{font-size:8.5px}.name-col,.tot-col,thead th{position:static}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<input type="file" id="logoInput" class="file-in" accept="image/*" />
+<input type="file" id="jsonInput" class="file-in" accept="application/json" />
+
+<script type="text/babel">
+const {useState,useMemo,useEffect,useRef}=React;
+const sb=(SUPABASE_URL&&SUPABASE_ANON_KEY)?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
+
+const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const WD=["D","S","T","Q","Q","S","S"];
+const PREFS={misto:"Equilibrado dia/noite",mais_dia:"Mais diurno",mais_noite:"Mais noturno",so_dia:"Só diurno",so_noite:"Só noturno"};
+const PLANOS=[{n:1,preco:49.90},{n:2,preco:69.90},{n:3,preco:79.90},{n:4,preco:89.90},{n:5,preco:99.90}];
+const DEF_TURNOS=()=>[
+  {code:"SD",nome:"Diurno",horas:12,periodo:"dia",auto:true},
+  {code:"SN",nome:"Noturno",horas:12,periodo:"noite",auto:true},
+  {code:"M",nome:"Manhã",horas:6,periodo:"dia",auto:false},
+  {code:"T",nome:"Tarde",horas:6,periodo:"dia",auto:false}];
+const DEF_LIC=()=>[
+  {code:"F",nome:"Folga"},{code:"FE",nome:"Férias"},{code:"LN",nome:"Licença Nojo (luto)"},
+  {code:"LG",nome:"Licença Gala (casamento)"},{code:"LM",nome:"Licença Médica"},
+  {code:"LMT",nome:"Lic. Maternidade/Paternidade"},{code:"AB",nome:"Abonado / Liberado"},{code:"LC",nome:"Outra licença"}];
+const DEF_FUNC=()=>[{id:"enf",nome:"Enfermeiro"},{id:"tec",nome:"Técnico"}];
+const uid=()=>Math.random().toString(36).slice(2,9);
+const daysInMonth=(y,m)=>new Date(y,m+1,0).getDate();
+const wdOf=(y,m,d)=>new Date(y,m,d).getDay();
+const isWknd=(y,m,d)=>{const w=wdOf(y,m,d);return w===0||w===6;};
+const novaEquipe=(nome)=>({id:uid(),nome,diasSemana:6,restRule:true,defWeekly:36,turnos:DEF_TURNOS(),funcoes:DEF_FUNC(),
+  cover:{semana:{SD:{enf:1,tec:2},SN:{enf:1,tec:2}},fds:{SD:{enf:1,tec:1},SN:{enf:1,tec:1}}},profs:[],holidayMap:{},sched:{}});
+const estadoInicial=()=>{const e=novaEquipe("Equipe 1");const n=new Date();
+  return {org:{nome:"Minha unidade — Escala",logo:null},licencas:DEF_LIC(),equipes:[e],ativa:e.id,mes:n.getMonth(),ano:n.getFullYear(),plano:{limite:1,status:"demo",vigenteAte:null}};};
+
+// ---------- persistência ----------
+const KEY="escala_pro_v1";
+const loadLocal=()=>{try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null;}catch(e){return null;}};
+const saveLocal=s=>{try{localStorage.setItem(KEY,JSON.stringify(s));}catch(e){}};
+let _t=null;
+function persistCloud(user,s){if(!sb||!user)return;clearTimeout(_t);
+  _t=setTimeout(()=>sb.from("estados").upsert({user_id:user.id,dados:s,atualizado_em:new Date().toISOString()}).then(()=>{}),900);}
+
+// ---------- motor ----------
+function gerarEscala({y,m,eq,ym}){
+  const dim=daysInMonth(y,m);const hol=(eq.holidayMap||{})[ym]||[];
+  const isFds=d=>isWknd(y,m,d)||hol.includes(d);const dayType=d=>isFds(d)?"fds":"semana";
+  const req=(d,tc,fid)=>(((eq.cover||{})[dayType(d)]||{})[tc]||{})[fid]||0;
+  const turnoH={};eq.turnos.forEach(t=>turnoH[t.code]=t.horas);
+  const autoTurnos=eq.turnos.filter(t=>t.auto);const autoCodes=new Set(autoTurnos.map(t=>t.code));
+  const cur=(eq.sched||{})[ym]||{};const next={};eq.profs.forEach(p=>next[p.id]={});
+  eq.profs.forEach(p=>{const r=cur[p.id]||{};for(const d in r){const v=r[d];if(v&&v!=="F"&&!autoCodes.has(v))next[p.id][d]=v;}});
+  const ds=eq.diasSemana||6;let dc=0;
+  for(let d=1;d<=dim;d++){const w=wdOf(y,m,d);const off=ds>=6?w===0:(w===0||w===6);if(!off&&!hol.includes(d))dc++;}
+  const tgt={},hrs={},dia={},noi={},fds={};
+  eq.profs.forEach(p=>{tgt[p.id]=Math.round((p.weekly||0)/ds*dc);hrs[p.id]=0;dia[p.id]=0;noi[p.id]=0;fds[p.id]=0;
+    for(const d in next[p.id])hrs[p.id]+=turnoH[next[p.id][d]]||0;});
+  const busy=(id,d)=>{const v=next[id][d];return v!=null&&v!=="";};
+  const longPrev=(id,d)=>{const v=next[id][d-1];return !!v&&(turnoH[v]||0)>=12;};
+  const prefPer=p=>(p.pref==="so_dia"||p.pref==="mais_dia")?"dia":(p.pref==="so_noite"||p.pref==="mais_noite")?"noite":null;
+  const WF=0.18,WT=0.04,WP=0.35,WM=0.01;
+  for(let d=1;d<=dim;d++){const f=isFds(d);
+    const slots=[];for(const t of autoTurnos)for(const fn of eq.funcoes){
+      const have=eq.profs.filter(p=>p.funcaoId===fn.id&&next[p.id][d]===t.code).length;
+      const rem=req(d,t.code,fn.id)-have;if(rem>0)slots.push({t,fn,rem});}
+    while(true){let best=null;
+      for(const sl of slots){if(sl.rem<=0)continue;
+        for(const p of eq.profs){
+          if(p.funcaoId!==sl.fn.id||busy(p.id,d))continue;if(eq.restRule&&longPrev(p.id,d))continue;
+          if(p.pref==="so_dia"&&sl.t.periodo==="noite")continue;if(p.pref==="so_noite"&&sl.t.periodo==="dia")continue;
+          const pp=prefPer(p);let s=hrs[p.id]/(tgt[p.id]||1)+(f?fds[p.id]*WF:0)+(pp?0:(sl.t.periodo==="dia"?dia[p.id]:noi[p.id])*WT);
+          if(pp&&pp!==sl.t.periodo)s+=WP;if(pp&&pp===sl.t.periodo)s-=WM;
+          if(!best||s<best.s||(s===best.s&&hrs[p.id]<hrs[best.p.id]))best={p,sl,s};}}
+      if(!best)break;
+      const {p,sl}=best;next[p.id][d]=sl.t.code;hrs[p.id]+=sl.t.horas;sl.rem--;
+      if(sl.t.periodo==="dia")dia[p.id]++;else noi[p.id]++;if(f)fds[p.id]++;}
+  }
+  eq.profs.forEach(p=>{for(let d=1;d<=dim;d++)if(!next[p.id][d])next[p.id][d]="F";});
+  return next;
+}
+
+function App(){
+  const [S,setS]=useState(()=>loadLocal()||estadoInicial());
+  const [user,setUser]=useState(null);const [email,setEmail]=useState("");const [otpSent,setOtpSent]=useState(false);
+  const [showPlanos,setShowPlanos]=useState(false);const [newEq,setNewEq]=useState("");
+  const [newProf,setNewProf]=useState("");const [holIn,setHolIn]=useState("");
+  const [lv,setLv]=useState({id:"",tipo:"FE",a:1,b:1});
+  const cloudLoaded=useRef(false);
+
+  const eq=S.equipes.find(e=>e.id===S.ativa)||S.equipes[0];
+  const {mes,ano}=S;const dim=daysInMonth(ano,mes);const ym=ano+"-"+mes;
+  const hol=(eq.holidayMap||{})[ym]||[];
+  const isHol=d=>hol.includes(d);const isFds=d=>isWknd(ano,mes,d)||isHol(d);const dayType=d=>isFds(d)?"fds":"semana";
+  const req=(d,tc,fid)=>(((eq.cover||{})[dayType(d)]||{})[tc]||{})[fid]||0;
+  const sched=(eq.sched||{})[ym]||{};
+  const turnoMap=useMemo(()=>{const m={};eq.turnos.forEach(t=>m[t.code]=t);return m;},[eq.turnos]);
+  const licMap=useMemo(()=>{const m={};S.licencas.forEach(l=>m[l.code]=l);return m;},[S.licencas]);
+  const autoTurnos=eq.turnos.filter(t=>t.auto);
+  const days=Array.from({length:dim},(_,i)=>i+1);
+  const diasContados=useMemo(()=>{let n=0;for(let d=1;d<=dim;d++){const w=wdOf(ano,mes,d);
+    const off=(eq.diasSemana||6)>=6?w===0:(w===0||w===6);if(!off&&!hol.includes(d))n++;}return n;},[dim,ano,mes,eq.diasSemana,hol]);
+  const alvo=p=>Math.round((p.weekly||0)/(eq.diasSemana||6)*diasContados);
+  const hDe=code=>turnoMap[code]?turnoMap[code].horas:0;
+  const totais=useMemo(()=>{const t={};eq.profs.forEach(p=>{let h=0;const r=sched[p.id]||{};for(const d in r)h+=hDe(r[d]);t[p.id]=h;});return t;},[eq.profs,sched,turnoMap]);
+  const coverage=useMemo(()=>{const c={};for(let d=1;d<=dim;d++){c[d]={};autoTurnos.forEach(t=>{c[d][t.code]={};eq.funcoes.forEach(f=>c[d][t.code][f.id]=0);});}
+    eq.profs.forEach(p=>{const r=sched[p.id]||{};for(const d in r){const v=r[d];if(c[d]&&c[d][v]&&c[d][v][p.funcaoId]!=null)c[d][v][p.funcaoId]++;}});return c;},[eq.profs,sched,dim,eq.turnos,eq.funcoes]);
+  const fdsCount=useMemo(()=>{const o={};eq.profs.forEach(p=>{o[p.id]=0;const r=sched[p.id]||{};for(const d in r){if(turnoMap[r[d]]&&isFds(+d))o[p.id]++;}});return o;},[eq.profs,sched,turnoMap,hol,ano,mes]);
+  const liberado=S.plano.status==="demo"||S.plano.status==="trial"||(S.plano.status==="ativo"&&(!S.plano.vigenteAte||new Date(S.plano.vigenteAte)>new Date()));
+
+  // ---------- nuvem (opcional) ----------
+  useEffect(()=>{if(!sb)return;sb.auth.getSession().then(({data})=>setUser(data.session?.user||null));
+    const {data:sub}=sb.auth.onAuthStateChange((_e,s)=>setUser(s?.user||null));return()=>sub.subscription.unsubscribe();},[]);
+  useEffect(()=>{if(!sb||!user||cloudLoaded.current)return;(async()=>{
+    const [e,a]=await Promise.all([sb.from("estados").select("dados").eq("user_id",user.id).maybeSingle(),
+      sb.from("assinaturas").select("limite_equipes,status,vigente_ate").eq("user_id",user.id).order("atualizado_em",{ascending:false}).limit(1).maybeSingle()]);
+    if(e.data&&e.data.dados)setS(s=>({...e.data.dados,plano:s.plano}));
+    if(a.data)setS(s=>({...s,plano:{limite:a.data.limite_equipes||1,status:a.data.status||"expirado",vigenteAte:a.data.vigente_ate}}));
+    cloudLoaded.current=true;})();},[user]);
+  useEffect(()=>{saveLocal(S);if(cloudLoaded.current)persistCloud(user,S);},[S,user]);
+  async function login(){if(!sb||!email)return;await sb.auth.signInWithOtp({email});setOtpSent(true);}
+
+  // ---------- helpers de estado ----------
+  const upd=fn=>setS(s=>fn({...s}));
+  const updEq=fn=>setS(s=>({...s,equipes:s.equipes.map(e=>e.id===s.ativa?fn({...e}):e)}));
+  const setSched=fn=>updEq(e=>{const all={...(e.sched||{})};all[ym]=fn({...(all[ym]||{})});return {...e,sched:all};});
+  function setCell(pid,d,code){setSched(sc=>{const r={...(sc[pid]||{})};if(code)r[d]=code;else delete r[d];return {...sc,[pid]:r};});}
+  function mudarMes(k){let m=mes+k,y=ano;if(m<0){m=11;y--;}if(m>11){m=0;y++;}upd(s=>({...s,mes:m,ano:y}));}
+  function addEquipe(){const n=newEq.trim();if(!n)return;if(S.equipes.length>=S.plano.limite){setShowPlanos(true);return;}
+    const e=novaEquipe(n);upd(s=>({...s,equipes:[...s.equipes,e],ativa:e.id}));setNewEq("");}
+  function rmEquipe(id){if(S.equipes.length<=1)return;if(!confirm("Remover esta equipe e todas as escalas dela?"))return;
+    upd(s=>{const eqs=s.equipes.filter(e=>e.id!==id);return {...s,equipes:eqs,ativa:eqs[0].id};});}
+  function addHol(){const d=+holIn;if(!d||d<1||d>dim||hol.includes(d))return;updEq(e=>{const hm={...(e.holidayMap||{})};hm[ym]=[...(hm[ym]||[]),d].sort((a,b)=>a-b);return {...e,holidayMap:hm};});setHolIn("");}
+  function rmHol(d){updEq(e=>{const hm={...(e.holidayMap||{})};hm[ym]=(hm[ym]||[]).filter(x=>x!==d);return {...e,holidayMap:hm};});}
+  function updTurno(i,k,v){updEq(e=>{const t=e.turnos.map((x,j)=>j===i?{...x,[k]:v}:x);return {...e,turnos:t};});}
+  function addTurno(){updEq(e=>({...e,turnos:[...e.turnos,{code:"N"+(e.turnos.length+1),nome:"Novo turno",horas:12,periodo:"dia",auto:true}]}));}
+  function rmTurno(i){updEq(e=>({...e,turnos:e.turnos.filter((_,j)=>j!==i)}));}
+  function updFunc(i,v){updEq(e=>({...e,funcoes:e.funcoes.map((x,j)=>j===i?{...x,nome:v}:x)}));}
+  function addFunc(){updEq(e=>({...e,funcoes:[...e.funcoes,{id:uid(),nome:"Nova função"}]}));}
+  function rmFunc(i){updEq(e=>({...e,funcoes:e.funcoes.filter((_,j)=>j!==i)}));}
+  function updLic(i,k,v){upd(s=>({...s,licencas:s.licencas.map((x,j)=>j===i?{...x,[k]:v}:x)}));}
+  function addLic(){upd(s=>({...s,licencas:[...s.licencas,{code:"L"+(s.licencas.length+1),nome:"Nova licença"}]}));}
+  function rmLic(i){if(S.licencas[i].code==="F")return;upd(s=>({...s,licencas:s.licencas.filter((_,j)=>j!==i)}));}
+  function updCov(dt,tc,fid,v){updEq(e=>{const c=JSON.parse(JSON.stringify(e.cover||{semana:{},fds:{}}));c[dt]=c[dt]||{};c[dt][tc]=c[dt][tc]||{};c[dt][tc][fid]=v;return {...e,cover:c};});}
+  function addProf(){const n=newProf.trim();if(!n)return;updEq(e=>({...e,profs:[...e.profs,{id:uid(),nome:n,funcaoId:e.funcoes[0]?.id,weekly:e.defWeekly||36,pref:"misto"}]}));setNewProf("");}
+  function updProf(id,k,v){updEq(e=>({...e,profs:e.profs.map(p=>p.id===id?{...p,[k]:v}:p)}));}
+  function rmProf(id){updEq(e=>{const sc={...(e.sched||{})};for(const k in sc){sc[k]={...sc[k]};delete sc[k][id];}return {...e,profs:e.profs.filter(p=>p.id!==id),sched:sc};});}
+  function aplicarAfast(){if(!lv.id)return;const a=Math.min(lv.a,lv.b),b=Math.max(lv.a,lv.b);setSched(sc=>{const r={...(sc[lv.id]||{})};for(let d=a;d<=b;d++)r[d]=lv.tipo;return {...sc,[lv.id]:r};});}
+  function gerar(){if(!liberado){setShowPlanos(true);return;}const next=gerarEscala({y:ano,m:mes,eq,ym});setSched(()=>next);}
+  function limpar(){const autoCodes=new Set(autoTurnos.map(t=>t.code));setSched(sc=>{const n={};for(const id in sc){n[id]={};for(const d in sc[id]){const v=sc[id][d];if(v&&v!=="F"&&!autoCodes.has(v))n[id][d]=v;}}return n;});}
+  function cellClass(code){if(!code)return "";const t=turnoMap[code];if(t)return t.periodo==="noite"?"k-noite":(t.horas>=12?"k-dia":"k-curto");
+    if(code==="F")return "k-F";if(code==="FE")return "k-FE";return "k-lic";}
+  function pill(h,t){const d=h-t;const cls=Math.abs(d)<12?"p-ok":Math.abs(d)<24?"p-warn":"p-bad";return <span className={"pill "+cls}>{d===0?"ok":(d>0?"+":"")+d+"h"}</span>;}
+
+  // ---------- diagnóstico ----------
+  const advice=useMemo(()=>{const out=[];if(eq.profs.length===0)return out;
+    const short=[];for(let d=1;d<=dim;d++)for(const t of autoTurnos)for(const f of eq.funcoes){const miss=req(d,t.code,f.id)-((coverage[d][t.code]||{})[f.id]||0);if(miss>0)short.push({d,t,f,miss});}
+    if(short.length===0)out.push({sev:"ok",text:`Cobertura mínima atendida em todos os ${dim} dias.`});
+    else{const shown=short.slice(0,4).map(s=>`dia ${s.d} (${WD[wdOf(ano,mes,s.d)]}): falta${s.miss>1?"m":""} ${s.miss} ${s.f.nome} no ${s.t.code}`);
+      out.push({sev:"crit",text:`Faltam profissionais em ${new Set(short.map(s=>s.d)).size} dia(s) — ${shown.join("; ")}${short.length>4?`; e mais ${short.length-4} lacuna(s)`:""}.`});
+      out.push({sev:"info",text:"O que fazer: escalar mais gente nesses dias, cadastrar profissionais, ou reduzir a exigência de cobertura."});}
+    const maxShifts=eq.restRule?Math.floor((dim+1)/2):dim;
+    eq.funcoes.forEach(f=>{let demand=0;for(let d=1;d<=dim;d++)autoTurnos.forEach(t=>demand+=req(d,t.code,f.id));
+      const n=eq.profs.filter(p=>p.funcaoId===f.id).length,supply=n*maxShifts;
+      if(n===0&&demand>0){out.push({sev:"crit",text:`Nenhum(a) ${f.nome} cadastrado(a), mas a cobertura exige ${demand} plantões dessa função no mês.`});return;}
+      if(demand>supply)out.push({sev:"warn",text:`${f.nome}: exigência de ${demand} plantões/mês acima da capacidade (~${supply}). Faltam ~${demand-supply} — contratar ${Math.ceil((demand-supply)/maxShifts)} ou reduzir cobertura.`});});
+    ["noite","dia"].forEach(per=>{eq.funcoes.forEach(f=>{const ts=autoTurnos.filter(t=>t.periodo===per);if(!ts.length)return;
+      let dem=false;for(let d=1;d<=dim&&!dem;d++)ts.forEach(t=>{if(req(d,t.code,f.id)>0)dem=true;});if(!dem)return;
+      const able=eq.profs.filter(p=>p.funcaoId===f.id&&p.pref!==(per==="noite"?"so_dia":"so_noite")).length;
+      if(able===0)out.push({sev:"crit",text:`O ${per==="noite"?"noturno":"diurno"} exige ${f.nome}, mas ninguém dessa função pode fazer ${per} (todos "só ${per==="noite"?"diurno":"noturno"}").`});});});
+    const over=eq.profs.filter(p=>(totais[p.id]||0)-alvo(p)>=24),underT=eq.profs.filter(p=>alvo(p)-(totais[p.id]||0)>=24);
+    if(over.length)out.push({sev:"warn",text:`Acima do alvo (+24h ou mais): ${over.map(p=>p.nome).join(", ")} — redistribua plantões.`});
+    if(underT.length)out.push({sev:"info",text:`Abaixo do alvo (−24h ou mais): ${underT.map(p=>p.nome).join(", ")} — podem assumir mais plantões.`});
+    if(!over.length&&!underT.length&&eq.profs.some(p=>totais[p.id]))out.push({sev:"ok",text:"Cargas dentro de ±24h do alvo para toda a equipe."});
+    if(eq.profs.some(p=>totais[p.id]))eq.funcoes.forEach(f=>{const ps=eq.profs.filter(p=>p.funcaoId===f.id);if(ps.length<2)return;
+      const v=ps.map(p=>fdsCount[p.id]||0),mn=Math.min(...v),mx=Math.max(...v);
+      if(mx-mn<=1)out.push({sev:"ok",text:`${f.nome}: fins de semana/feriados bem distribuídos (${mn}–${mx} por pessoa).`});
+      else out.push({sev:"warn",text:`${f.nome}: fins de semana desiguais (${mn}–${mx}). ${ps.filter(p=>fdsCount[p.id]===mx).map(p=>p.nome).join(", ")} trabalha(m) mais; ${ps.filter(p=>fdsCount[p.id]===mn).map(p=>p.nome).join(", ")} menos. Troque um plantão de fim de semana entre eles.`});});
+    return out;},[eq,sched,coverage,dim,ano,mes,totais,fdsCount,hol]);
+
+  // ---------- exportações ----------
+  function exportExcel(){const wb=XLSX.utils.book_new();const head=["Profissional","Função","Carga sem.","Preferência"];
+    for(let d=1;d<=dim;d++)head.push(d+WD[wdOf(ano,mes,d)]+(isHol(d)?"*":""));head.push("Total","Alvo","Δ","FdS");
+    const aoa=[[S.org.nome+" — "+eq.nome],["Escala — "+MESES[mes]+"/"+ano+(hol.length?"  ·  Feriados: "+hol.join(", ")+" (*)":"")],[],head];
+    eq.profs.forEach(p=>{const f=eq.funcoes.find(x=>x.id===p.funcaoId);const row=[p.nome,f?f.nome:"",p.weekly+"h",PREFS[p.pref]||""];const r=sched[p.id]||{};
+      for(let d=1;d<=dim;d++)row.push(r[d]||"");const h=totais[p.id]||0,t=alvo(p);row.push(h,t,h-t,fdsCount[p.id]||0);aoa.push(row);});
+    aoa.push([]);autoTurnos.forEach(t=>eq.funcoes.forEach(f=>{const r=[t.code+" "+f.nome,"sem "+(((eq.cover.semana||{})[t.code]||{})[f.id]||0),"fds "+(((eq.cover.fds||{})[t.code]||{})[f.id]||0),""];
+      for(let d=1;d<=dim;d++)r.push((coverage[d][t.code]||{})[f.id]||0);aoa.push(r);}));
+    aoa.push([]);aoa.push(["Legenda"]);eq.turnos.forEach(t=>aoa.push([t.code,t.nome,t.horas+"h"]));S.licencas.forEach(l=>aoa.push([l.code,l.nome,"0h"]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);ws["!cols"]=[{wch:22},{wch:14},{wch:9},{wch:16},...Array(dim).fill({wch:4}),{wch:6},{wch:6},{wch:5},{wch:5}];
+    XLSX.utils.book_append_sheet(wb,ws,"Escala");XLSX.writeFile(wb,"escala-"+eq.nome.toLowerCase().replace(/\s+/g,"-")+"-"+MESES[mes].toLowerCase()+"-"+ano+".xlsx");}
+  function exportJSON(){const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="escala-pro-backup.json";a.click();}
+  useEffect(()=>{const li=document.getElementById("logoInput"),ji=document.getElementById("jsonInput");
+    const lh=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>upd(s=>({...s,org:{...s.org,logo:ev.target.result}}));r.readAsDataURL(f);}e.target.value="";};
+    const jh=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const s=JSON.parse(ev.target.result);if(s.equipes)setS(s);else alert("Arquivo inválido.");}catch(err){alert("Arquivo inválido.");}};r.readAsText(f);e.target.value="";};
+    li.addEventListener("change",lh);ji.addEventListener("change",jh);return()=>{li.removeEventListener("change",lh);ji.removeEventListener("change",jh);};});
+  async function pagar(n){const pl=PLANOS.find(p=>p.n===n);if(!PAY_ENDPOINT){alert(`Plano ${n} equipe(s): R$ ${pl.preco.toFixed(2).replace(".",",")}/mês.\nPagamento Pix será ativado quando o Worker estiver configurado.`);return;}
+    if(!sb||!user){setShowPlanos(true);alert("Entre com seu e-mail (no painel de planos) antes de pagar.");return;}
+    try{const {data}=await sb.auth.getSession();const tok=data.session?.access_token;
+      const r=await fetch(PAY_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+tok},body:JSON.stringify({plano:n})});
+      const j=await r.json();if(j.ticket_url)window.open(j.ticket_url,"_blank");else alert("Não foi possível iniciar o pagamento: "+(j.error||"erro"));}catch(e){alert("Erro ao iniciar pagamento.");}}
+
+  const badge=S.plano.status==="demo"?<span className="badge demo">○ Demo · 1 equipe</span>:liberado?<span className="badge live">● {S.plano.limite} equipe(s){S.plano.vigenteAte?" até "+new Date(S.plano.vigenteAte).toLocaleDateString("pt-BR"):""}</span>:<span className="badge lock">⚠ Plano vencido</span>;
+  const maxH=Math.max(1,...eq.profs.map(p=>Math.max(alvo(p),totais[p.id]||0)));
+
+  return (
+    <div className="wrap">
+      {showPlanos&&<div className="overlay noprint" onClick={()=>setShowPlanos(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+        <h2 style={{fontFamily:"'Space Grotesk'",margin:"0 0 6px"}}>Planos por número de equipes</h2>
+        <p style={{color:"var(--muted)",margin:"0 0 14px",fontSize:13}}>Cada equipe/setor tem sua própria escala mensal. Pagamento por Pix, libera por 30 dias.</p>
+        <div className="plans">{PLANOS.map(p=><div className={"plan"+(S.plano.limite===p.n&&liberado?" cur":"")} key={p.n}>
+          <div className="n">{p.n} equipe{p.n>1?"s":""}</div><div className="p">R$ {p.preco.toFixed(2).replace(".",",")}</div><div className="s">por mês · Pix</div>
+          <button className="btn primary sm" style={{marginTop:8}} onClick={()=>pagar(p.n)}>Assinar</button></div>)}</div>
+        {sb&&!user&&<div style={{marginTop:16,borderTop:"1px solid var(--line)",paddingTop:12}}>
+          <div className="hint" style={{marginTop:0,marginBottom:6}}>Entre com seu e-mail para salvar na nuvem e ativar o plano.</div>
+          <div className="addrow" style={{marginTop:0}}><input placeholder="seu@email.com" value={email} onChange={e=>setEmail(e.target.value)}/><button className="btn primary" onClick={login}>{otpSent?"Link enviado ✓":"Entrar"}</button></div></div>}
+        <div style={{textAlign:"right",marginTop:12}}><button className="btn" onClick={()=>setShowPlanos(false)}>Fechar</button></div></div></div>}
+
+      <div className="topbar">
+        <div className="logo-slot" onClick={()=>document.getElementById("logoInput").click()} title="Enviar logo">{S.org.logo?<img src={S.org.logo} alt="logo"/>:<span>+ logo</span>}</div>
+        <div className="brand"><input className="unit" value={S.org.nome} onChange={e=>upd(s=>({...s,org:{...s.org,nome:e.target.value}}))}/><div className="title">Escala Pro · {eq.nome} · {MESES[mes]}/{ano}</div></div>
+        <div className="noprint">{badge}</div>
+        <div className="actions noprint">
+          <button className="btn" onClick={()=>setShowPlanos(true)}>Planos</button>
+          <button className="btn" onClick={()=>document.getElementById("jsonInput").click()}>Abrir</button>
+          <button className="btn" onClick={exportJSON}>Salvar</button>
+          <button className="btn" onClick={()=>window.print()}>Imprimir</button>
+          <button className="btn" onClick={exportExcel}>Excel</button>
+          <button className="btn primary" onClick={gerar}>⚡ Gerar escala</button>
+        </div>
+      </div>
+
+      <div className="tabs noprint">
+        {S.equipes.map(e=><button key={e.id} className={"tab"+(e.id===S.ativa?" on":"")} onClick={()=>upd(s=>({...s,ativa:e.id}))}>{e.nome}</button>)}
+        <input value={newEq} placeholder="Nova equipe / setor" onChange={e=>setNewEq(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addEquipe()} style={{border:"1px solid var(--line)",borderRadius:999,padding:"7px 12px",fontSize:13}}/>
+        <button className="btn sm" onClick={addEquipe}>+ equipe</button>
+        {S.equipes.length>1&&<button className="btn ghost sm" onClick={()=>rmEquipe(eq.id)}>remover atual</button>}
+        <span className="hint" style={{marginTop:0,marginLeft:"auto"}}>{S.equipes.length}/{S.plano.limite} equipe(s) no plano</span>
+      </div>
+
+      <div className="panel noprint">
+        <h2>Período · carga horária · feriados <span className="sp"></span>
+          <input value={eq.nome} onChange={e=>updEq(x=>({...x,nome:e.target.value}))} style={{border:"1px solid var(--line)",borderRadius:8,padding:"5px 9px",fontWeight:600,fontSize:13}} title="Nome da equipe"/></h2>
+        <div className="row">
+          <button className="navbtn" onClick={()=>mudarMes(-1)}>‹</button><div className="mlabel">{MESES[mes]} {ano}</div><button className="navbtn" onClick={()=>mudarMes(1)}>›</button>
+          <div className="field"><label>Dias trab./semana</label><select value={eq.diasSemana||6} onChange={e=>updEq(x=>({...x,diasSemana:+e.target.value}))}><option value={6}>6 (só domingo folga)</option><option value={5}>5 (seg a sex)</option></select></div>
+          <div className="field"><label>Carga padrão (novos)</label><input type="number" value={eq.defWeekly||36} onChange={e=>updEq(x=>({...x,defWeekly:+e.target.value||0}))}/></div>
+          <label className="toggle"><input type="checkbox" checked={!!eq.restRule} onChange={e=>updEq(x=>({...x,restRule:e.target.checked}))}/> Folga após turno ≥12h</label>
+          <div className="stat"><div className="k">Dias no mês</div><div className="v">{dim}</div></div>
+          <div className="stat"><div className="k">Dias contados</div><div className="v">{diasContados}</div></div>
+          <div className="field"><label>Feriado (dia)</label><div style={{display:"flex",gap:6}}><input type="number" min="1" max={dim} value={holIn} onChange={e=>setHolIn(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addHol()}/><button className="btn sm" onClick={addHol}>+</button></div></div>
+        </div>
+        {hol.length>0&&<div className="chips">{hol.map(d=><span className="chipx" key={d}>{d}/{mes+1}<button onClick={()=>rmHol(d)}>×</button></span>)}</div>}
+        <div className="hint">Alvo mensal por pessoa = (carga semanal ÷ {eq.diasSemana||6}) × dias contados ({diasContados}). Cada feriado marcado desconta um dia. Feriados usam a cobertura de fim de semana.</div>
+      </div>
+
+      <div className="panel noprint"><h2>Turnos de trabalho <span className="sp"></span><button className="btn sm" onClick={addTurno}>+ turno</button></h2>
+        <table className="tb"><thead><tr><th>Código</th><th>Nome</th><th>Horas</th><th>Período</th><th>Preenchimento automático</th><th></th></tr></thead><tbody>
+          {eq.turnos.map((t,i)=><tr key={i}>
+            <td><input className="code" value={t.code} onChange={e=>updTurno(i,"code",e.target.value.toUpperCase().replace(/\s/g,"").slice(0,4))}/></td>
+            <td><input className="nm" value={t.nome} onChange={e=>updTurno(i,"nome",e.target.value)}/></td>
+            <td><input className="sm" type="number" value={t.horas} onChange={e=>updTurno(i,"horas",+e.target.value||0)}/></td>
+            <td><select value={t.periodo} onChange={e=>updTurno(i,"periodo",e.target.value)}><option value="dia">Diurno</option><option value="noite">Noturno</option></select></td>
+            <td><label className="toggle"><input type="checkbox" checked={!!t.auto} onChange={e=>updTurno(i,"auto",e.target.checked)}/> entra na cobertura e no gerador</label></td>
+            <td><button className="btn ghost sm" onClick={()=>rmTurno(i)}>remover</button></td></tr>)}</tbody></table>
+        <div className="hint">Turnos sem preenchimento automático (ex.: Manhã/Tarde 6h) ficam para você colocar à mão — contam nas horas, não na cobertura.</div></div>
+
+      <div className="panel noprint"><h2>Funções e cobertura exigida <span className="sp"></span><button className="btn sm" onClick={addFunc}>+ função</button></h2>
+        <div className="row" style={{alignItems:"flex-start"}}>
+          <div style={{minWidth:220}}>{eq.funcoes.map((f,i)=><div key={f.id} style={{display:"flex",gap:6,marginBottom:6}}><input value={f.nome} onChange={e=>updFunc(i,e.target.value)} style={{flex:1,border:"1px solid var(--line)",borderRadius:7,padding:"5px 8px"}}/><button className="btn ghost sm" onClick={()=>rmFunc(i)}>×</button></div>)}</div>
+          {[["semana","Dias de semana",""],["fds","Fim de semana / feriado","hl"]].map(([dt,lbl,cls])=><div className={"group "+cls} key={dt}><div className="glab">{lbl}</div>
+            <table className="cov"><thead><tr><th>Turno</th>{eq.funcoes.map(f=><th key={f.id}>{f.nome}</th>)}</tr></thead><tbody>
+              {autoTurnos.map(t=><tr key={t.code}><td className="mono" style={{fontWeight:700}}>{t.code}</td>{eq.funcoes.map(f=><td key={f.id}><input type="number" min="0" value={(((eq.cover||{})[dt]||{})[t.code]||{})[f.id]||0} onChange={e=>updCov(dt,t.code,f.id,+e.target.value||0)}/></td>)}</tr>)}
+              {autoTurnos.length===0&&<tr><td colSpan={eq.funcoes.length+1} style={{color:"var(--muted)"}}>nenhum turno automático</td></tr>}</tbody></table></div>)}
+        </div></div>
+
+      <div className="panel noprint"><h2>Tipos de licença / afastamento <span className="sp"></span><button className="btn sm" onClick={addLic}>+ tipo</button></h2>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:6}}>
+          {S.licencas.map((l,i)=><div key={i} style={{display:"flex",gap:6}}><input className="code" value={l.code} disabled={l.code==="F"} onChange={e=>updLic(i,"code",e.target.value.toUpperCase().replace(/\s/g,"").slice(0,4))} style={{width:60,border:"1px solid var(--line)",borderRadius:7,padding:"5px 7px",fontFamily:"'JetBrains Mono'",fontWeight:700}}/>
+            <input value={l.nome} onChange={e=>updLic(i,"nome",e.target.value)} style={{flex:1,border:"1px solid var(--line)",borderRadius:7,padding:"5px 8px"}}/>
+            <button className="btn ghost sm" onClick={()=>rmLic(i)} disabled={l.code==="F"}>×</button></div>)}</div></div>
+
+      <div className="panel noprint"><h2>Profissionais da equipe</h2>
+        {eq.profs.length===0?<div className="empty" style={{padding:"8px 0"}}>Nenhum profissional cadastrado.</div>:
+        <table className="tb"><thead><tr><th>Nome</th><th>Função</th><th>Carga semanal</th><th>Preferência</th><th>Alvo mensal</th><th></th></tr></thead><tbody>
+          {eq.profs.map(p=><tr key={p.id}>
+            <td><input className="nm" value={p.nome} onChange={e=>updProf(p.id,"nome",e.target.value)}/></td>
+            <td><select value={p.funcaoId} onChange={e=>updProf(p.id,"funcaoId",e.target.value)}>{eq.funcoes.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</select></td>
+            <td><input className="sm" type="number" value={p.weekly} onChange={e=>updProf(p.id,"weekly",+e.target.value||0)}/> h</td>
+            <td><select value={p.pref||"misto"} onChange={e=>updProf(p.id,"pref",e.target.value)}>{Object.entries(PREFS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></td>
+            <td className="alvo">{alvo(p)}h</td>
+            <td><button className="btn ghost sm" onClick={()=>rmProf(p.id)}>remover</button></td></tr>)}</tbody></table>}
+        <div className="addrow"><input value={newProf} placeholder="Nome do profissional" onChange={e=>setNewProf(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addProf()}/><button className="btn primary" onClick={addProf}>Adicionar</button></div></div>
+
+      <div className="panel noprint"><h2>Aplicar afastamento por período</h2>
+        <div className="row">
+          <div className="field"><label>Profissional</label><select value={lv.id} onChange={e=>setLv({...lv,id:e.target.value})} style={{minWidth:170}}><option value="">— selecione —</option>{eq.profs.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
+          <div className="field"><label>Tipo</label><select value={lv.tipo} onChange={e=>setLv({...lv,tipo:e.target.value})}>{S.licencas.map(l=><option key={l.code} value={l.code}>{l.code} · {l.nome}</option>)}</select></div>
+          <div className="field"><label>Do dia</label><input type="number" min="1" max={dim} value={lv.a} onChange={e=>setLv({...lv,a:+e.target.value||1})}/></div>
+          <div className="field"><label>Até o dia</label><input type="number" min="1" max={dim} value={lv.b} onChange={e=>setLv({...lv,b:+e.target.value||1})}/></div>
+          <button className="btn primary" onClick={aplicarAfast}>Aplicar</button></div>
+        <div className="hint">Afastamentos e turnos manuais são preservados ao clicar em “Gerar escala”.</div></div>
+
+      <div className="grid-scroll">
+        {eq.profs.length===0?<div className="empty">Cadastre a equipe e clique em “Gerar escala”.</div>:
+        <table className="sched"><thead><tr><th className="name-col">Profissional</th>
+          {days.map(d=><th key={d} className={isHol(d)?"hol":isWknd(ano,mes,d)?"wknd":""}><div className="dwd">{WD[wdOf(ano,mes,d)]}</div><div className="dnum">{d}</div>{isHol(d)&&<div className="fer">FER</div>}</th>)}
+          <th className="tot-col">Carga / Balanço</th></tr></thead>
+        <tbody>{eq.profs.map(p=>{const r=sched[p.id]||{};const h=totais[p.id]||0;const t=alvo(p);const f=eq.funcoes.find(x=>x.id===p.funcaoId);
+          return <tr key={p.id}><td className="name-col"><div className="nm-main">{p.nome}</div><div className="nm-tags">{(f?f.nome:"").toUpperCase().slice(0,12)} · {p.weekly}h · {PREFS[p.pref]||"misto"}</div></td>
+            {days.map(d=>{const code=r[d]||"";return <td key={d} className={isHol(d)?"hol":isWknd(ano,mes,d)?"wknd":""}>
+              <select className={"cell-sel "+cellClass(code)} value={code} onChange={e=>setCell(p.id,d,e.target.value)}>
+                <option value="">·</option><optgroup label="Turnos">{eq.turnos.map(t=><option key={t.code} value={t.code}>{t.code}</option>)}</optgroup>
+                <optgroup label="Licenças">{S.licencas.map(l=><option key={l.code} value={l.code}>{l.code}</option>)}</optgroup></select></td>;})}
+            <td className="tot-col"><div className="tot-wrap"><span className="tot-h mono">{h}h</span>{pill(h,t)}</div></td></tr>;})}</tbody>
+        <tfoot>{autoTurnos.map(t=>eq.funcoes.map(f=><tr key={t.code+f.id}>
+          <td className="name-col cov-lbl">{t.code} {f.nome.slice(0,10)} <small>· sem {(((eq.cover||{}).semana||{})[t.code]||{})[f.id]||0} / fds {(((eq.cover||{}).fds||{})[t.code]||{})[f.id]||0}</small></td>
+          {days.map(d=>{const c=(coverage[d][t.code]||{})[f.id]||0;const need=req(d,t.code,f.id);return <td key={d} className={(isHol(d)?"hol ":isWknd(ano,mes,d)?"wknd ":"")+(c<need?"under":"")}>{c||""}</td>;})}
+          <td className="tot-col"></td></tr>))}</tfoot></table>}
+      </div>
+
+      <div className="legend noprint">
+        {eq.turnos.map(t=><span key={t.code}><i className={"chip "+cellClass(t.code)}>{t.code}</i>{t.nome} {t.horas}h</span>)}
+        {S.licencas.map(l=><span key={l.code}><i className={"chip "+cellClass(l.code)}>{l.code}</i>{l.nome}</span>)}
+        <button className="btn ghost sm" style={{marginLeft:"auto"}} onClick={limpar}>Limpar plantões automáticos</button>
+      </div>
+
+      {eq.profs.length>0&&<div className="panel noprint" style={{marginTop:14}}><h2>Diagnóstico e orientações</h2>
+        <div className="adv-list">{advice.map((a,i)=><div className={"adv adv-"+a.sev} key={i}><span className="adv-ic">{a.sev==="ok"?"✓":a.sev==="info"?"→":"⚠"}</span><span>{a.text}</span></div>)}</div>
+        <div className="hint">Atualiza sozinho conforme você edita a escala, a equipe ou a cobertura.</div></div>}
+
+      {eq.profs.length>0&&<div className="panel noprint"><h2>Balanço de carga horária</h2>
+        {eq.profs.map(p=>{const h=totais[p.id]||0,t=alvo(p),d=h-t;const cls=Math.abs(d)<12?"var(--ok)":Math.abs(d)<24?"var(--warn)":"var(--bad)";
+          return <div className="bal-row" key={p.id}><div className="bal-name">{p.nome} <span style={{color:"var(--muted)",fontWeight:400,fontSize:11}}>· alvo {t}h · {fdsCount[p.id]||0} fds/fer</span></div>
+            <div className="bar-track"><div className="bar-fill" style={{width:Math.min(100,h/maxH*100)+"%",background:cls}}></div><div className="bar-target" style={{left:(t/maxH*100)+"%"}}></div></div>
+            <div className="bar-info"><span className="tot-h mono">{h}h</span>{pill(h,t)}</div></div>;})}
+        <div className="hint">Linha preta = alvo individual. Verde ±12h · Amarelo até ±24h · Vermelho acima.</div></div>}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
