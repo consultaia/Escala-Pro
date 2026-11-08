@@ -121,7 +121,7 @@
         <li>Todo dia: 2 enfermeiros de PL (24h) e 2 de SA.</li>
         <li>24, 25, 31/12 e 01/01: só PL de 24h. Nos outros dias, um PL pode ser dividido em MT + SN.</li>
         <li>Nenhum serviço em dias seguidos (PL, MT, SN ou SA), para ninguém passar de 24h.</li>
-        <li>No máximo 1 PL em dia festivo por pessoa.</li>
+        <li>Livre escolha dos dias festivos (sem limite de PL festivo por pessoa).</li>
         <li>Rodada 0: Hilton, Mayane, Milena e Fernanda escolhem, cada um, o dia e o turno do seu plantão de 12h. Cada dia dividido precisa de 1 MT e 1 SN.</li>
         <li>Depois: 1º PL, 2º PL e os 2 SA — sempre por antiguidade.</li>
       </ul>
@@ -137,6 +137,7 @@ const DAYS = [
   { l: "01/01", w: "sex" },
 ];
 const FEST = new Set([1, 2, 8, 9]);
+const FEST_LIMIT = false; // livre escolha: sem limite de PL festivo por pessoa
 
 const PEOPLE = [
   { id: "janan", n: "CT Janan", fixed: [[0, "PL"]] },
@@ -209,7 +210,7 @@ function blockReason(c, kind, p, d, t) {
   }
   if (kind === "PL") {
     if (c.plU[d] >= 2) return "Vagas de PL preenchidas";
-    if (FEST.has(d) && c.festPL[p]) return "Você já tem 1 PL festivo";
+    if (FEST_LIMIT && FEST.has(d) && c.festPL[p]) return "Você já tem 1 PL festivo";
   } else if (c.sa[d] >= 2) return "Vagas de SA preenchidas";
   return null;
 }
@@ -268,7 +269,7 @@ function feasible(sel, extraUnits) {
       let plPeople = 0, hPeople = 0, any = 0;
       for (const p of IDS) {
         if (!ok(p)) continue;
-        if (plN[p] > 0 && !(FEST.has(e) && fest[p])) plPeople++;
+        if (plN[p] > 0 && !(FEST_LIMIT && FEST.has(e) && fest[p])) plPeople++;
         if (hN[p] > 0) hPeople++;
         if (needOf(p) > 0) any++;
       }
@@ -299,7 +300,7 @@ function feasible(sel, extraUnits) {
       if (!needOf(p)) continue;
       let mask = "";
       for (let e = d; e < 10; e++) mask += fixedOk(p, e) ? "1" : "0";
-      prof.push(plN[p] + "." + saN[p] + "." + hN[p] + (fest[p] && plN[p] ? "f" : "") + (prev.has(p) ? "p" : "") + mask);
+      prof.push(plN[p] + "." + saN[p] + "." + hN[p] + (FEST_LIMIT && fest[p] && plN[p] ? "f" : "") + (prev.has(p) ? "p" : "") + mask);
     }
     const key = d + "|" + prof.sort().join(",");
     if (memo.has(key)) return false;
@@ -315,7 +316,7 @@ function feasible(sel, extraUnits) {
       const used = new Set(hs);
       const cap = halfOpts.cap - (hs.length === 2 ? 1 : 0);
       hs.forEach((p) => hN[p]--);
-      const plC = IDS.filter((p) => !used.has(p) && avail(p) && plN[p] > 0 && !(FEST.has(d) && fest[p])).sort(byNeed);
+      const plC = IDS.filter((p) => !used.has(p) && avail(p) && plN[p] > 0 && !(FEST_LIMIT && FEST.has(d) && fest[p])).sort(byNeed);
       for (const pls of combos(plC, cap)) {
         const used2 = new Set([...used, ...pls]);
         const saC = IDS.filter((p) => !used2.has(p) && avail(p) && saN[p] > 0).sort(byNeed);
@@ -437,7 +438,7 @@ function whatsappText(sel) {
   return lines.join("\n");
 }
 
-if (typeof module !== "undefined") module.exports = { DAYS, FEST, PEOPLE, P, STEPS, assignments, makeCtx, blockReason, feasible, options, encode, decode, whatsappText, stepLabel, openHalf };
+if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PEOPLE, P, STEPS, assignments, makeCtx, blockReason, feasible, options, encode, decode, whatsappText, stepLabel, openHalf };
 
 </script>
 <script>
