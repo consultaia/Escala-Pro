@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escala Natal e Réveillon – Enfermagem HNSA</title>
+<style>
+  :root{
+    --navy:#0f2a4a; --navy2:#1d4673; --ink:#1b2430; --mute:#6b7685; --line:#e3e7ed;
+    --bg:#f4f6f9; --card:#fff; --ok:#1f8a4c; --okbg:#e8f6ee; --sel:#0f2a4a;
+    --no:#9aa3ad; --nobg:#f0f2f5; --warn:#b4541a; --warnbg:#fdf0e7; --gold:#c8a24a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.4}
+  header{background:var(--navy);color:#fff;padding:18px 16px 16px}
+  header h1{margin:0;font-size:19px;letter-spacing:.2px}
+  header p{margin:4px 0 0;opacity:.8;font-size:13px}
+  main{max-width:640px;margin:0 auto;padding:12px 12px 40px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card h2{font-size:15px;margin:0 0 8px;color:var(--navy)}
+  .muted{color:var(--mute);font-size:13px}
+  textarea{width:100%;min-height:84px;border:1px solid var(--line);border-radius:10px;padding:10px;font:13px/1.35 ui-monospace,Menlo,monospace;resize:vertical}
+  button{font:inherit;border:0;border-radius:10px;padding:12px 14px;cursor:pointer}
+  .btn{background:var(--navy);color:#fff;font-weight:600;width:100%}
+  .btn:disabled{background:#c5ccd5;cursor:default}
+  .btn2{background:#fff;color:var(--navy);border:1px solid var(--navy2);font-weight:600}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .row>*{flex:1}
+  .msg{margin-top:8px;font-size:13px;border-radius:8px;padding:8px 10px}
+  .msg.err{background:var(--warnbg);color:var(--warn)}
+  .msg.ok{background:var(--okbg);color:var(--ok)}
+  .turn{border:2px solid var(--navy2)}
+  .who{font-size:20px;font-weight:700;color:var(--navy);margin:2px 0}
+  .task{font-size:14px;margin-bottom:6px}
+  .days{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+  .day{text-align:left;padding:10px;border-radius:10px;border:1.5px solid var(--line);background:var(--nobg);color:var(--no);min-height:58px}
+  .day b{display:block;font-size:15px}
+  .day small{display:block;font-size:11.5px;line-height:1.25;margin-top:2px}
+  .day.ok{background:var(--okbg);border-color:#bfe3cd;color:var(--ok)}
+  .day.trava{background:var(--warnbg);border-color:#f2cfb7;color:var(--warn)}
+  .day.sel{background:var(--sel);border-color:var(--sel);color:#fff}
+  .star{color:var(--gold)}
+  .seg{display:flex;border:1px solid var(--navy2);border-radius:10px;overflow:hidden;margin-top:10px}
+  .seg button{flex:1;border-radius:0;background:#fff;color:var(--navy);padding:10px}
+  .seg button.on{background:var(--navy);color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+  th{color:var(--mute);font-weight:600;font-size:11.5px}
+  td.d{white-space:nowrap;font-weight:600}
+  .fest td{background:#fffaf0}
+  .tag{display:inline-block;font-size:10.5px;padding:1px 5px;border-radius:5px;background:#eef1f5;color:var(--mute);margin-right:3px}
+  .empty{color:#c0c6ce}
+  details summary{cursor:pointer;color:var(--navy);font-weight:600}
+  details ul{padding-left:18px;margin:8px 0 0}
+  .hidden{display:none}
+  .prog{height:6px;background:#e6eaf0;border-radius:4px;overflow:hidden;margin-top:8px}
+  .prog i{display:block;height:100%;background:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Escala de Natal e Réveillon</h1>
+  <p>Divisão de Enfermagem · HNSA · 23/12 a 01/01</p>
+</header>
+<main>
+  <section class="card" id="loadCard">
+    <h2>1. Cole a última lista do grupo</h2>
+    <p class="muted">Copie a mensagem mais recente da escala no WhatsApp (a que termina com <b>ESC2:</b>) e cole aqui.</p>
+    <textarea id="paste" placeholder="Cole aqui a última lista do grupo…"></textarea>
+    <div class="row">
+      <button class="btn" id="loadBtn">Carregar lista</button>
+    </div>
+    <div class="row"><button class="btn2" id="startBtn">Ainda não tem lista? Começar do zero</button></div>
+    <div id="loadMsg"></div>
+  </section>
+
+  <section class="card turn hidden" id="turnCard">
+    <div class="muted" id="roundLbl"></div>
+    <div class="who" id="whoLbl"></div>
+    <div class="task" id="taskLbl"></div>
+    <div class="muted">Só escolha se for a sua vez. Verde = pode escolher · cinza = bloqueado · laranja = travaria a escala de quem vem depois.</div>
+    <div id="turnoBox" class="seg hidden">
+      <button data-t="MT">MT (07h–19h)</button>
+      <button data-t="SN">SN (19h–07h)</button>
+    </div>
+    <div class="days" id="days"></div>
+    <div class="row"><button class="btn" id="confirmBtn" disabled>Confirmar escolha</button></div>
+    <div id="turnMsg"></div>
+  </section>
+
+  <section class="card hidden" id="copyCard">
+    <h2>2. Envie no grupo</h2>
+    <p class="muted">Copie a lista atualizada e cole no grupo do WhatsApp. A próxima pessoa usa essa mensagem.</p>
+    <button class="btn" id="copyBtn">Copiar lista atualizada</button>
+    <div id="copyMsg"></div>
+    <textarea id="outText" readonly class="hidden" style="margin-top:8px;min-height:220px"></textarea>
+    <div class="row"><button class="btn2" id="undoBtn">Desfazer minha escolha</button></div>
+  </section>
+
+  <section class="card hidden" id="doneCard">
+    <h2>✅ Escala completa</h2>
+    <p class="muted">Todos já escolheram. Copie a lista final para o grupo.</p>
+    <button class="btn" id="copyFinalBtn">Copiar lista final</button>
+    <div id="copyFinalMsg"></div>
+  </section>
+
+  <section class="card hidden" id="boardCard">
+    <h2>Como está a escala</h2>
+    <div class="prog"><i id="progBar" style="width:0%"></i></div>
+    <p class="muted" id="progLbl" style="margin:6px 0 8px"></p>
+    <table>
+      <thead><tr><th>Dia</th><th>Plantão (PL)</th><th>Sobreaviso (SA)</th></tr></thead>
+      <tbody id="board"></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Regras da escala</summary>
+      <ul class="muted">
+        <li>Todo dia: 2 enfermeiros de PL (24h) e 2 de SA.</li>
+        <li>24, 25, 31/12 e 01/01: só PL de 24h. Nos outros dias, um PL pode ser dividido em MT + SN.</li>
+        <li>Nenhum serviço em dias seguidos (PL, MT, SN ou SA), para ninguém passar de 24h.</li>
+        <li>No máximo 1 PL em dia festivo por pessoa.</li>
+        <li>Rodada 0: Hilton, Mayane, Milena e Fernanda escolhem, cada um, o dia e o turno do seu plantão de 12h. Cada dia dividido precisa de 1 MT e 1 SN.</li>
+        <li>Depois: 1º PL, 2º PL e os 2 SA — sempre por antiguidade.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+<script>
+// ===== Lógica da escala (sem DOM) =====
+const DAYS = [
+  { l: "23/12", w: "qua" }, { l: "24/12", w: "qui" }, { l: "25/12", w: "sex" },
+  { l: "26/12", w: "sáb" }, { l: "27/12", w: "dom" }, { l: "28/12", w: "seg" },
+  { l: "29/12", w: "ter" }, { l: "30/12", w: "qua" }, { l: "31/12", w: "qui" },
+  { l: "01/01", w: "sex" },
+];
+const FEST = new Set([1, 2, 8, 9]);
+
+const PEOPLE = [
+  { id: "janan", n: "CT Janan", fixed: [[0, "PL"]] },
+  { id: "lidiane", n: "1T Lidiane", ferias: true },
+  { id: "hilton", n: "1T Hilton", pl: 1, sa: 2, h12: 1 },
+  { id: "mayane", n: "1T Mayane", pl: 1, sa: 2, h12: 1 },
+  { id: "milena", n: "1T Milena", pl: 1, sa: 2, h12: 1 },
+  { id: "fernanda", n: "1T Fernanda", pl: 1, sa: 2, h12: 1 },
+  { id: "joice", n: "1T Joice", pl: 2, sa: 2 },
+  { id: "tainara", n: "2T Tainara", pl: 2, sa: 2 },
+  { id: "nubia", n: "2T Núbia", pl: 2, sa: 2 },
+  { id: "malena", n: "2T Malena", fixed: [[9, "PL"]] },
+  { id: "alexia", n: "2T Alexia", pl: 2, sa: 2 },
+  { id: "shirlene", n: "2T Shirlene", pl: 2, sa: 2 },
+  { id: "flavia", n: "2T Flávia", pl: 2, sa: 2 },
+];
+const P = Object.fromEntries(PEOPLE.map((p) => [p.id, p]));
+const POOL = PEOPLE.filter((p) => p.pl).map((p) => p.id);
+const IDS = PEOPLE.map((p) => p.id);
+const CODE = "ESC2:";
+
+const STEPS = [];
+POOL.filter((id) => P[id].h12).forEach((id) => STEPS.push({ p: id, k: "H12", r: 0 }));
+POOL.forEach((id) => STEPS.push({ p: id, k: "PL", r: 1 }));
+POOL.filter((id) => P[id].pl === 2).forEach((id) => STEPS.push({ p: id, k: "PL", r: 2 }));
+POOL.forEach((id) => STEPS.push({ p: id, k: "SA", r: 3 }));
+
+// sel: escolhas por etapa. H12: {d, t:'MT'|'SN'}; PL: {d}; SA: {d:[a,b]}
+function assignments(sel) {
+  const a = [];
+  PEOPLE.forEach((p) => (p.fixed || []).forEach(([d, t]) => a.push({ p: p.id, d, t })));
+  sel.forEach((s, i) => {
+    const st = STEPS[i];
+    if (st.k === "H12") a.push({ p: st.p, d: s.d, t: s.t });
+    else if (st.k === "PL") a.push({ p: st.p, d: s.d, t: "PL" });
+    else s.d.forEach((d) => a.push({ p: st.p, d, t: "SA" }));
+  });
+  return a;
+}
+
+// plU[d] = unidades de PL ocupadas (um dia com MT e/ou SN conta 1 unidade)
+function makeCtx(asg) {
+  const busy = {}, festPL = {}, plU = Array(10).fill(0), sa = Array(10).fill(0);
+  const mt = Array(10).fill(null), sn = Array(10).fill(null);
+  IDS.forEach((id) => { busy[id] = new Set(); festPL[id] = false; });
+  asg.forEach(({ p, d, t }) => {
+    busy[p].add(d);
+    if (t === "PL") { plU[d]++; if (FEST.has(d)) festPL[p] = true; }
+    if (t === "MT") mt[d] = p;
+    if (t === "SN") sn[d] = p;
+    if (t === "SA") sa[d]++;
+  });
+  for (let d = 0; d < 10; d++) if (mt[d] || sn[d]) plU[d]++;
+  return { busy, festPL, plU, sa, mt, sn };
+}
+const near = (c, p, d) => c.busy[p].has(d) || c.busy[p].has(d - 1) || c.busy[p].has(d + 1);
+const openHalf = (c, d) => (c.mt[d] && !c.sn[d] ? "SN" : c.sn[d] && !c.mt[d] ? "MT" : null);
+
+// motivo de bloqueio (string) ou null se pode. Para H12, t opcional.
+function blockReason(c, kind, p, d, t) {
+  if (c.busy[p].has(d)) return "Você já tem serviço neste dia";
+  if (near(c, p, d)) return "Serviço em dia vizinho (passaria de 24h)";
+  if (kind === "H12") {
+    if (FEST.has(d)) return "Dia festivo: só PL de 24h";
+    if (c.mt[d] && c.sn[d]) return "Turnos de 12h já preenchidos";
+    const open = openHalf(c, d);
+    if (open) { if (t && t !== open) return "Turno já escolhido"; return null; }
+    if (c.plU[d] >= 2) return "Sem vaga de PL neste dia";
+    return null;
+  }
+  if (kind === "PL") {
+    if (c.plU[d] >= 2) return "Vagas de PL preenchidas";
+    if (FEST.has(d) && c.festPL[p]) return "Você já tem 1 PL festivo";
+  } else if (c.sa[d] >= 2) return "Vagas de SA preenchidas";
+  return null;
+}
+
+// Existe forma de completar a escala? true / false / null (não deu tempo de saber)
+// Varredura dia a dia, com memória de estados equivalentes que já falharam.
+function feasible(sel, extraUnits) {
+  const c = makeCtx(assignments(sel));
+  const plN = {}, saN = {}, hN = {};
+  IDS.forEach((id) => { plN[id] = 0; saN[id] = 0; hN[id] = 0; });
+  const add = (k, p) => { if (k === "H12") hN[p]++; else if (k === "PL") plN[p]++; else saN[p]++; };
+  for (let i = sel.length; i < STEPS.length; i++) {
+    const st = STEPS[i];
+    add(st.k, st.p);
+    if (st.k === "SA") add("SA", st.p);
+  }
+  (extraUnits || []).forEach((u) => add(u.k, u.p));
+  const fest = {};
+  IDS.forEach((id) => (fest[id] = c.festPL[id]));
+  const fixedOk = (p, e) => !near(c, p, e);
+  const hasHalf = (e) => !!(c.mt[e] || c.sn[e]);
+  const memo = new Set();
+  let nodes = 0;
+  const LIMIT = 300000;
+  const needOf = (p) => plN[p] + saN[p] + hN[p];
+  let newSplits = 0; // dias divididos abertos durante a varredura
+
+  // total: turnos de 12h pendentes = meias abertas + 2 × dias novos a dividir
+  let openTotal = 0;
+  for (let e = 0; e < 10; e++) if (openHalf(c, e)) openTotal++;
+  const hTotal = IDS.reduce((s, p) => s + hN[p], 0);
+  if ((hTotal - openTotal) % 2 !== 0 || hTotal < openTotal) return false;
+
+  function prune(d, prev) {
+    for (const p of IDS) {
+      const n = needOf(p);
+      if (!n) continue;
+      let k = 0, last = -9;
+      for (let e = d; e < 10; e++) {
+        if (!fixedOk(p, e) || (e === d && prev.has(p))) continue;
+        if (e - last >= 2) { k++; last = e; }
+      }
+      if (k < n) return false;
+    }
+    let hLeft = 0, openLeft = 0, capPL = 0, needPL = 0, capSA = 0, needSA = 0;
+    IDS.forEach((p) => { hLeft += hN[p]; needPL += plN[p]; needSA += saN[p]; });
+    for (let e = d; e < 10; e++) {
+      if (openHalf(c, e)) openLeft++;
+      capPL += 2 - c.plU[e]; capSA += 2 - c.sa[e];
+    }
+    const pairsLeft = (hLeft - openLeft) / 2;
+    if (pairsLeft < 0 || pairsLeft !== Math.floor(pairsLeft)) return false;
+    if (capPL !== needPL + pairsLeft || capSA !== needSA) return false;
+    for (let e = d; e < 10; e++) {
+      const ok = (p) => fixedOk(p, e) && !(e === d && prev.has(p));
+      let plPeople = 0, hPeople = 0, any = 0;
+      for (const p of IDS) {
+        if (!ok(p)) continue;
+        if (plN[p] > 0 && !(FEST.has(e) && fest[p])) plPeople++;
+        if (hN[p] > 0) hPeople++;
+        if (needOf(p) > 0) any++;
+      }
+      const capFree = 2 - c.plU[e], saCap = 2 - c.sa[e];
+      if (openHalf(c, e) && hPeople < 1) return false;
+      const canSplit = !FEST.has(e) && !hasHalf(e) && pairsLeft > 0 && hPeople >= 2 ? 1 : 0;
+      if (plPeople + canSplit < capFree) return false;
+      if (any < capFree + saCap + (openHalf(c, e) ? 1 : 0)) return false;
+    }
+    return true;
+  }
+  function combos(arr, k) {
+    const out = [];
+    const rec = (s, cur) => {
+      if (cur.length === k) { out.push(cur.slice()); return; }
+      for (let i = s; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); }
+    };
+    rec(0, []);
+    return out;
+  }
+  const byNeed = (a, b) => needOf(b) - needOf(a);
+  function sweep(d, prev) {
+    if (++nodes > LIMIT) throw "limit";
+    if (d === 10) return IDS.every((p) => needOf(p) === 0);
+    if (!prune(d, prev)) return false;
+    const prof = [];
+    for (const p of IDS) {
+      if (!needOf(p)) continue;
+      let mask = "";
+      for (let e = d; e < 10; e++) mask += fixedOk(p, e) ? "1" : "0";
+      prof.push(plN[p] + "." + saN[p] + "." + hN[p] + (fest[p] && plN[p] ? "f" : "") + (prev.has(p) ? "p" : "") + mask);
+    }
+    const key = d + "|" + prof.sort().join(",");
+    if (memo.has(key)) return false;
+    const avail = (p) => fixedOk(p, d) && !prev.has(p);
+    const hC = IDS.filter((p) => avail(p) && hN[p] > 0);
+    // quem faz o(s) turno(s) de 12h neste dia
+    let halfOpts;
+    if (openHalf(c, d)) halfOpts = { cap: 2 - c.plU[d], sets: combos(hC, 1) };
+    else if (!FEST.has(d) && !hasHalf(d) && c.plU[d] <= 1) halfOpts = { cap: 2 - c.plU[d], sets: [[]].concat(combos(hC, 2)) };
+    else halfOpts = { cap: 2 - c.plU[d], sets: [[]] };
+    const saCap = 2 - c.sa[d];
+    for (const hs of halfOpts.sets) {
+      const used = new Set(hs);
+      const cap = halfOpts.cap - (hs.length === 2 ? 1 : 0);
+      hs.forEach((p) => hN[p]--);
+      const plC = IDS.filter((p) => !used.has(p) && avail(p) && plN[p] > 0 && !(FEST.has(d) && fest[p])).sort(byNeed);
+      for (const pls of combos(plC, cap)) {
+        const used2 = new Set([...used, ...pls]);
+        const saC = IDS.filter((p) => !used2.has(p) && avail(p) && saN[p] > 0).sort(byNeed);
+        for (const sas of combos(saC, saCap)) {
+          pls.forEach((p) => plN[p]--);
+          const pf = pls.map((p) => fest[p]);
+          if (FEST.has(d)) pls.forEach((p) => (fest[p] = true));
+          sas.forEach((p) => saN[p]--);
+          const ok = sweep(d + 1, new Set([...used2, ...sas]));
+          pls.forEach((p, i) => { plN[p]++; fest[p] = pf[i]; });
+          sas.forEach((p) => saN[p]++);
+          if (ok) { hs.forEach((p) => hN[p]++); return true; }
+        }
+      }
+      hs.forEach((p) => hN[p]++);
+    }
+    memo.add(key);
+    return false;
+  }
+  try { return sweep(0, new Set()); } catch (e) { if (e === "limit") return null; throw e; }
+}
+
+// Opções de dia para a etapa atual. partial: dias já marcados nesta etapa (SA)
+function options(sel, partial) {
+  const i = sel.length;
+  const st = STEPS[i];
+  if (!st) return [];
+  const asg = assignments(sel);
+  (partial || []).forEach((d) => asg.push({ p: st.p, d, t: "SA" }));
+  const c = makeCtx(asg);
+  return DAYS.map((_, d) => {
+    if ((partial || []).includes(d)) return { d, ok: true, picked: true };
+    const why = blockReason(c, st.k, st.p, d);
+    if (why) return { d, ok: false, why };
+    let trial, extra = [], forced = null;
+    if (st.k === "H12") {
+      forced = openHalf(c, d);
+      trial = sel.concat([{ d, t: forced || "MT" }]);
+    } else if (st.k === "PL") trial = sel.concat([{ d }]);
+    else {
+      const ds = (partial || []).concat([d]);
+      trial = sel.concat([{ d: ds }]);
+      if (ds.length < 2) extra = [{ k: "SA", p: st.p }];
+    }
+    const f = feasible(trial, extra);
+    if (f === false) return { d, ok: false, why: "Travaria a escala dos próximos", trava: true };
+    const o = { d, ok: true };
+    if (st.k === "H12") {
+      o.forced = forced;
+      o.with = forced ? P[forced === "SN" ? c.mt[d] : c.sn[d]].n : null;
+    }
+    return o;
+  });
+}
+
+// ===== Código para o WhatsApp =====
+function encode(sel) {
+  return CODE + sel.map((s, i) => {
+    const k = STEPS[i].k;
+    if (k === "H12") return s.d + (s.t === "MT" ? "M" : "N");
+    if (k === "PL") return String(s.d);
+    return s.d.slice().sort((a, b) => a - b).join("");
+  }).join("-");
+}
+function decode(text) {
+  const m = /ESC2:([0-9MN\-]*)/.exec(text || "");
+  if (!m) return null;
+  const parts = m[1] ? m[1].split("-").filter((x) => x !== "") : [];
+  const sel = [];
+  for (let i = 0; i < parts.length; i++) {
+    const st = STEPS[i], s = parts[i];
+    if (!st) return null;
+    let v;
+    if (st.k === "H12") { if (!/^\d[MN]$/.test(s)) return null; v = { d: +s[0], t: s[1] === "M" ? "MT" : "SN" }; }
+    else if (st.k === "PL") { if (!/^\d$/.test(s)) return null; v = { d: +s }; }
+    else { if (!/^\d\d$/.test(s)) return null; v = { d: [+s[0], +s[1]] }; }
+    const c = makeCtx(assignments(sel));
+    if (st.k === "SA") {
+      if (v.d[0] === v.d[1]) return null;
+      if (blockReason(c, "SA", st.p, v.d[0])) return null;
+      const c2 = makeCtx(assignments(sel).concat([{ p: st.p, d: v.d[0], t: "SA" }]));
+      if (blockReason(c2, "SA", st.p, v.d[1])) return null;
+    } else if (blockReason(c, st.k, st.p, v.d, v.t)) return null;
+    sel.push(v);
+  }
+  return sel;
+}
+
+function personLine(id, asg) {
+  const p = P[id];
+  if (p.ferias) return p.n + " – FÉRIAS";
+  const mine = asg.filter((a) => a.p === id).sort((a, b) => a.d - b.d);
+  const fmt = (t) => mine.filter((a) => a.t === t).map((a) => DAYS[a.d].l);
+  const pl = fmt("PL"), sa = fmt("SA");
+  const h = mine.filter((a) => a.t === "MT" || a.t === "SN").map((a) => DAYS[a.d].l + " " + a.t);
+  const blanks = (arr, n) => { const r = arr.slice(); while (r.length < n) r.push("___"); return r.join(" , "); };
+  if (p.fixed) return p.n + " – PL: " + pl.join(" , ");
+  let s = p.n + " – ";
+  if (p.h12) s += "12h: " + blanks(h, 1) + " | ";
+  s += "PL: " + blanks(pl, p.pl) + " | SA: " + blanks(sa, p.sa);
+  return s;
+}
+
+function stepLabel(st) {
+  if (st.k === "H12") return "escolher o dia e o turno de 12h";
+  if (st.k === "PL") return st.r === 1 ? "escolher o 1º PL" : "escolher o 2º PL";
+  return "escolher os 2 SA";
+}
+
+function whatsappText(sel) {
+  const asg = assignments(sel);
+  const st = STEPS[sel.length];
+  const lines = ["*ESCALA NATAL/RÉVEILLON – 23/12 a 01/01*", ""];
+  PEOPLE.forEach((p) => lines.push(personLine(p.id, asg)));
+  lines.push("");
+  lines.push(st ? "➡️ *Próximo(a): " + P[st.p].n + "* – " + stepLabel(st) : "✅ *Escala completa!*");
+  lines.push("");
+  lines.push(encode(sel));
+  return lines.join("\n");
+}
+
+if (typeof module !== "undefined") module.exports = { DAYS, FEST, PEOPLE, P, STEPS, assignments, makeCtx, blockReason, feasible, options, encode, decode, whatsappText, stepLabel, openHalf };
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let sel = null;          // escolhas confirmadas (estado carregado)
+  let pick = [];           // dias marcados na etapa atual
+  let turno = null;        // MT/SN na rodada 0
+  let justPicked = false;  // escolheu nesta visita
+  let lastForced = false;
+  function forcedPrev() { const r = lastForced; return r; }
+
+  function msg(el, text, kind) {
+    el.innerHTML = "";
+    if (!text) return;
+    const d = document.createElement("div");
+    d.className = "msg " + (kind || "ok");
+    d.textContent = text;
+    el.appendChild(d);
+  }
+
+  function shortName(id) { return P[id].n.replace(/^(CT|1T|2T)\s+/, ""); }
+
+  function renderBoard() {
+    const asg = assignments(sel);
+    const tb = $("board");
+    tb.innerHTML = "";
+    DAYS.forEach((day, d) => {
+      const tr = document.createElement("tr");
+      if (FEST.has(d)) tr.className = "fest";
+      const here = asg.filter((a) => a.d === d);
+      const pl = here.filter((a) => a.t === "PL").map((a) => shortName(a.p));
+      const mt = here.find((a) => a.t === "MT"), sn = here.find((a) => a.t === "SN");
+      if (mt || sn) pl.push((mt ? shortName(mt.p) : "___") + " (MT) / " + (sn ? shortName(sn.p) : "___") + " (SN)");
+      const sa = here.filter((a) => a.t === "SA").map((a) => shortName(a.p));
+      const cell = (arr, n) => {
+        const td = document.createElement("td");
+        for (let i = 0; i < n; i++) {
+          const div = document.createElement("div");
+          if (arr[i]) div.textContent = arr[i]; else { div.textContent = "—"; div.className = "empty"; }
+          td.appendChild(div);
+        }
+        return td;
+      };
+      const td0 = document.createElement("td");
+      td0.className = "d";
+      td0.innerHTML = day.l + (FEST.has(d) ? ' <span class="star">★</span>' : "") + '<br><span class="tag">' + day.w + "</span>";
+      tr.appendChild(td0);
+      tr.appendChild(cell(pl, 2));
+      tr.appendChild(cell(sa, 2));
+      tb.appendChild(tr);
+    });
+    const pct = Math.round((sel.length / STEPS.length) * 100);
+    $("progBar").style.width = pct + "%";
+    $("progLbl").textContent = sel.length + " de " + STEPS.length + " escolhas feitas";
+  }
+
+  function renderTurn() {
+    const st = STEPS[sel.length];
+    $("turnCard").classList.toggle("hidden", !st || justPicked);
+    $("doneCard").classList.toggle("hidden", !!st || justPicked);
+    $("copyCard").classList.toggle("hidden", !justPicked);
+    if (!st || justPicked) return;
+    const rounds = ["Rodada 0 · turnos de 12h", "1ª rodada · 1º PL", "2ª rodada · 2º PL", "3ª rodada · sobreavisos"];
+    $("roundLbl").textContent = rounds[st.r];
+    $("whoLbl").textContent = "Vez de: " + P[st.p].n;
+    $("taskLbl").textContent = st.k === "H12"
+      ? "Escolha o dia e o turno do seu plantão de 12h. Dias com um turno já escolhido por alguém mostram qual turno falta."
+      : st.k === "PL" ? (st.r === 1 ? "Escolha o dia do seu 1º PL (24h)." : "Escolha o dia do seu 2º PL (24h).")
+      : "Escolha os 2 dias de sobreaviso (" + pick.length + "/2).";
+    $("turnoBox").classList.toggle("hidden", st.k !== "H12");
+
+    const box = $("days");
+    box.innerHTML = "";
+    const base = st.k === "SA" ? pick.slice(0, 1) : [];
+    let opts;
+    if (st.k === "SA" && pick.length === 2) {
+      opts = options(sel, [pick[0]]).map((o) => (o.d === pick[1] ? { d: o.d, ok: true, picked: true } : o));
+    } else opts = options(sel, base);
+    let forcedNow = null;
+    if (st.k === "H12" && pick.length) {
+      const po = opts.find((x) => x.d === pick[0]);
+      forcedNow = po && po.forced ? po.forced : null;
+      if (forcedNow) turno = forcedNow;
+      lastForced = !!forcedNow;
+    }
+    [...$("turnoBox").children].forEach((b) => {
+      b.classList.toggle("on", b.dataset.t === turno);
+      b.disabled = !!forcedNow && b.dataset.t !== forcedNow;
+      b.style.opacity = b.disabled ? ".35" : "";
+    });
+    opts.forEach((o) => {
+      const b = document.createElement("button");
+      const isSel = pick.includes(o.d);
+      b.className = "day " + (isSel ? "sel" : o.ok ? "ok" : o.trava ? "trava" : "");
+      b.disabled = !o.ok && !isSel;
+      const day = DAYS[o.d];
+      b.innerHTML = "<b>" + day.l + " " + (FEST.has(o.d) ? '<span class="star">★</span>' : "") + "</b><small></small>";
+      const extra = o.ok && o.forced ? " · falta o " + o.forced + " (" + o.with.replace(/^(CT|1T|2T)\s+/, "") + " no " + (o.forced === "SN" ? "MT" : "SN") + ")" : "";
+      b.querySelector("small").textContent = day.w + (isSel ? " · escolhido" + extra : o.ok ? (extra || " · livre") : " · " + o.why);
+      b.addEventListener("click", () => {
+        if (st.k === "SA") {
+          if (pick.includes(o.d)) pick = pick.filter((x) => x !== o.d);
+          else if (pick.length < 2) pick.push(o.d);
+          else return;
+          if (pick.length === 2) {
+            const o2 = options(sel, [pick[0]]).find((x) => x.d === pick[1]);
+            if (!o2 || !o2.ok) pick = [pick[1]];
+          }
+        } else {
+          pick = pick[0] === o.d ? [] : [o.d];
+          if (st.k === "H12" && !o.forced && forcedPrev(o.d)) turno = null;
+        }
+        renderTurn();
+      });
+      box.appendChild(b);
+    });
+    const ready = st.k === "SA" ? pick.length === 2 : st.k === "H12" ? pick.length === 1 && !!turno : pick.length === 1;
+    $("confirmBtn").disabled = !ready;
+  }
+
+  function render() {
+    $("boardCard").classList.remove("hidden");
+    renderBoard();
+    renderTurn();
+    if (justPicked) $("outText").value = whatsappText(sel);
+  }
+
+  function load(newSel) {
+    sel = newSel; pick = []; turno = null; justPicked = false;
+    msg($("turnMsg"), "");
+    msg($("copyMsg"), "");
+    render();
+    const st = STEPS[sel.length];
+    msg($("loadMsg"), st ? "Lista carregada. Agora é a vez de " + P[st.p].n + "." : "Lista carregada: escala completa.", "ok");
+    $("turnCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("loadBtn").addEventListener("click", () => {
+    const s = decode($("paste").value);
+    if (!s) {
+      msg($("loadMsg"), "Não encontrei o código ESC2: na mensagem, ou ele está incompleto. Copie a mensagem inteira, até a última linha.", "err");
+      return;
+    }
+    load(s);
+  });
+  $("startBtn").addEventListener("click", () => load([]));
+
+  [...$("turnoBox").children].forEach((b) => b.addEventListener("click", () => { turno = b.dataset.t; renderTurn(); }));
+
+  $("confirmBtn").addEventListener("click", () => {
+    const st = STEPS[sel.length];
+    let v;
+    if (st.k === "H12") v = { d: pick[0], t: turno };
+    else if (st.k === "PL") v = { d: pick[0] };
+    else v = { d: pick.slice().sort((a, b) => a - b) };
+    // confere de novo antes de gravar
+    const check = decode(encode(sel.concat([v])));
+    if (!check) { msg($("turnMsg"), "Essa escolha não vale pelas regras. Escolha outro dia.", "err"); return; }
+    sel = sel.concat([v]);
+    pick = []; turno = null; justPicked = true;
+    render();
+    $("copyCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  function copyText(text, msgEl) {
+    const fallback = () => {
+      const ta = $("outText");
+      ta.value = text;
+      ta.classList.remove("hidden");
+      ta.focus(); ta.select();
+      msg(msgEl, "Não consegui copiar sozinho. O texto está selecionado abaixo: segure e toque em Copiar.", "err");
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          () => msg(msgEl, "Copiado! Agora cole no grupo do WhatsApp.", "ok"),
+          fallback
+        );
+      } else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  $("copyBtn").addEventListener("click", () => copyText(whatsappText(sel), $("copyMsg")));
+  $("copyFinalBtn").addEventListener("click", () => copyText(whatsappText(sel), $("copyFinalMsg")));
+  $("undoBtn").addEventListener("click", () => {
+    sel = sel.slice(0, -1); justPicked = false; pick = []; turno = null;
+    $("outText").classList.add("hidden");
+    msg($("copyMsg"), "");
+    render();
+  });
+})();
+</script>
+</body>
+</html>
