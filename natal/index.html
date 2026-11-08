@@ -65,7 +65,7 @@
 <main>
   <section class="card" id="loadCard">
     <h2>1. Cole a última lista do grupo</h2>
-    <p class="muted">Copie a mensagem mais recente da escala no WhatsApp (a que termina com <b>ESC2:</b>) e cole aqui.</p>
+    <p class="muted">Copie a mensagem mais recente da escala no WhatsApp (a que termina com <b>ESC3:</b> ou <b>ESC2:</b>) e cole aqui.</p>
     <textarea id="paste" placeholder="Cole aqui a última lista do grupo…"></textarea>
     <div class="row">
       <button class="btn" id="loadBtn">Carregar lista</button>
@@ -94,7 +94,7 @@
     <button class="btn" id="copyBtn">Copiar lista atualizada</button>
     <div id="copyMsg"></div>
     <textarea id="outText" readonly class="hidden" style="margin-top:8px;min-height:220px"></textarea>
-    <div class="row"><button class="btn2" id="undoBtn">Desfazer minha escolha</button></div>
+    <div class="row"><button class="btn2" id="undoBtn">Desfazer minhas escolhas</button></div>
   </section>
 
   <section class="card hidden" id="doneCard">
@@ -122,8 +122,8 @@
         <li>24, 25, 31/12 e 01/01: só PL de 24h. Nos outros dias, um PL pode ser dividido em MT + SN.</li>
         <li>Nenhum serviço em dias seguidos (PL, MT, SN ou SA), para ninguém passar de 24h.</li>
         <li>Livre escolha dos dias festivos (sem limite de PL festivo por pessoa).</li>
-        <li>Rodada 0: Hilton, Mayane, Milena e Fernanda escolhem, cada um, o dia e o turno do seu plantão de 12h. Cada dia dividido precisa de 1 MT e 1 SN.</li>
-        <li>Depois: 1º PL, 2º PL e os 2 SA — sempre por antiguidade.</li>
+        <li>Hilton, Mayane, Milena e Fernanda têm 1 turno de 12h (MT ou SN). Cada dia dividido precisa de 1 MT e 1 SN.</li>
+        <li>Por antiguidade, cada um escolhe todos os seus dias na sua vez (PL e SA) e só depois passa para o próximo.</li>
       </ul>
     </details>
   </section>
@@ -157,19 +157,39 @@ const PEOPLE = [
 const P = Object.fromEntries(PEOPLE.map((p) => [p.id, p]));
 const POOL = PEOPLE.filter((p) => p.pl).map((p) => p.id);
 const IDS = PEOPLE.map((p) => p.id);
-const CODE = "ESC2:";
+const CODE = "ESC3:";
 
+// Ordem v2 (rodadas) — só para converter listas antigas (ESC2)
+const OLD_STEPS = [];
+POOL.filter((id) => P[id].h12).forEach((id) => OLD_STEPS.push({ p: id, k: "H12" }));
+POOL.forEach((id) => OLD_STEPS.push({ p: id, k: "PL" }));
+POOL.filter((id) => P[id].pl === 2).forEach((id) => OLD_STEPS.push({ p: id, k: "PL" }));
+POOL.forEach((id) => OLD_STEPS.push({ p: id, k: "SA" }));
+
+// Ordem v3: cada pessoa escolhe todos os seus dias na sua vez.
+// (as 12h e os PL de Hilton, Mayane e Milena já foram escolhidos na v2)
 const STEPS = [];
-POOL.filter((id) => P[id].h12).forEach((id) => STEPS.push({ p: id, k: "H12", r: 0 }));
-POOL.forEach((id) => STEPS.push({ p: id, k: "PL", r: 1 }));
-POOL.filter((id) => P[id].pl === 2).forEach((id) => STEPS.push({ p: id, k: "PL", r: 2 }));
-POOL.forEach((id) => STEPS.push({ p: id, k: "SA", r: 3 }));
+["hilton", "mayane", "milena", "fernanda"].forEach((id) => STEPS.push({ p: id, k: "H12" }));
+["hilton", "mayane", "milena"].forEach((id) => STEPS.push({ p: id, k: "PL" }));
+["hilton", "mayane", "milena"].forEach((id) => STEPS.push({ p: id, k: "SA" }));
+POOL.filter((id) => !["hilton", "mayane", "milena"].includes(id)).forEach((id) => {
+  for (let i = 0; i < P[id].pl; i++) STEPS.push({ p: id, k: "PL" });
+  STEPS.push({ p: id, k: "SA" });
+});
+const N = STEPS.length;
+
+// sel: array de tamanho N; null = ainda não escolhido.
+const emptySel = () => Array(N).fill(null);
+const cur = (sel) => { const i = sel.findIndex((x) => x === null); return i < 0 ? N : i; };
+const filled = (sel) => sel.filter((x) => x !== null).length;
+const withStep = (sel, i, v) => { const r = sel.slice(); r[i] = v; return r; };
 
 // sel: escolhas por etapa. H12: {d, t:'MT'|'SN'}; PL: {d}; SA: {d:[a,b]}
 function assignments(sel) {
   const a = [];
   PEOPLE.forEach((p) => (p.fixed || []).forEach(([d, t]) => a.push({ p: p.id, d, t })));
   sel.forEach((s, i) => {
+    if (s === null) return;
     const st = STEPS[i];
     if (st.k === "H12") a.push({ p: st.p, d: s.d, t: s.t });
     else if (st.k === "PL") a.push({ p: st.p, d: s.d, t: "PL" });
@@ -222,7 +242,8 @@ function feasible(sel, extraUnits) {
   const plN = {}, saN = {}, hN = {};
   IDS.forEach((id) => { plN[id] = 0; saN[id] = 0; hN[id] = 0; });
   const add = (k, p) => { if (k === "H12") hN[p]++; else if (k === "PL") plN[p]++; else saN[p]++; };
-  for (let i = sel.length; i < STEPS.length; i++) {
+  for (let i = 0; i < N; i++) {
+    if (sel[i] !== null) continue;
     const st = STEPS[i];
     add(st.k, st.p);
     if (st.k === "SA") add("SA", st.p);
@@ -341,7 +362,7 @@ function feasible(sel, extraUnits) {
 
 // Opções de dia para a etapa atual. partial: dias já marcados nesta etapa (SA)
 function options(sel, partial) {
-  const i = sel.length;
+  const i = cur(sel);
   const st = STEPS[i];
   if (!st) return [];
   const asg = assignments(sel);
@@ -354,11 +375,11 @@ function options(sel, partial) {
     let trial, extra = [], forced = null;
     if (st.k === "H12") {
       forced = openHalf(c, d);
-      trial = sel.concat([{ d, t: forced || "MT" }]);
-    } else if (st.k === "PL") trial = sel.concat([{ d }]);
+      trial = withStep(sel, i, { d, t: forced || "MT" });
+    } else if (st.k === "PL") trial = withStep(sel, i, { d });
     else {
       const ds = (partial || []).concat([d]);
-      trial = sel.concat([{ d: ds }]);
+      trial = withStep(sel, i, { d: ds });
       if (ds.length < 2) extra = [{ k: "SA", p: st.p }];
     }
     const f = feasible(trial, extra);
@@ -373,36 +394,74 @@ function options(sel, partial) {
 }
 
 // ===== Código para o WhatsApp =====
-function encode(sel) {
-  return CODE + sel.map((s, i) => {
-    const k = STEPS[i].k;
-    if (k === "H12") return s.d + (s.t === "MT" ? "M" : "N");
-    if (k === "PL") return String(s.d);
-    return s.d.slice().sort((a, b) => a - b).join("");
-  }).join("-");
+function encodePart(k, v) {
+  if (v === null) return "_";
+  if (k === "H12") return v.d + (v.t === "MT" ? "M" : "N");
+  if (k === "PL") return String(v.d);
+  return v.d.slice().sort((a, b) => a - b).join("");
 }
-function decode(text) {
-  const m = /ESC2:([0-9MN\-]*)/.exec(text || "");
-  if (!m) return null;
-  const parts = m[1] ? m[1].split("-").filter((x) => x !== "") : [];
-  const sel = [];
-  for (let i = 0; i < parts.length; i++) {
-    const st = STEPS[i], s = parts[i];
-    if (!st) return null;
-    let v;
-    if (st.k === "H12") { if (!/^\d[MN]$/.test(s)) return null; v = { d: +s[0], t: s[1] === "M" ? "MT" : "SN" }; }
-    else if (st.k === "PL") { if (!/^\d$/.test(s)) return null; v = { d: +s }; }
-    else { if (!/^\d\d$/.test(s)) return null; v = { d: [+s[0], +s[1]] }; }
-    const c = makeCtx(assignments(sel));
+function encode(sel) {
+  const parts = sel.map((v, i) => encodePart(STEPS[i].k, v));
+  while (parts.length && parts[parts.length - 1] === "_") parts.pop();
+  return CODE + parts.join("-");
+}
+function parsePart(k, s) {
+  if (k === "H12") return /^\d[MN]$/.test(s) ? { d: +s[0], t: s[1] === "M" ? "MT" : "SN" } : undefined;
+  if (k === "PL") return /^\d$/.test(s) ? { d: +s } : undefined;
+  return /^\d\d$/.test(s) && s[0] !== s[1] ? { d: [+s[0], +s[1]] } : undefined;
+}
+// valida um sel esparso contra as regras; devolve sel ou null
+function validate(sel) {
+  const ok = emptySel();
+  for (let i = 0; i < N; i++) {
+    const v = sel[i];
+    if (v === null) continue;
+    const st = STEPS[i];
+    const c = makeCtx(assignments(ok));
     if (st.k === "SA") {
-      if (v.d[0] === v.d[1]) return null;
       if (blockReason(c, "SA", st.p, v.d[0])) return null;
-      const c2 = makeCtx(assignments(sel).concat([{ p: st.p, d: v.d[0], t: "SA" }]));
+      const c2 = makeCtx(assignments(ok).concat([{ p: st.p, d: v.d[0], t: "SA" }]));
       if (blockReason(c2, "SA", st.p, v.d[1])) return null;
     } else if (blockReason(c, st.k, st.p, v.d, v.t)) return null;
-    sel.push(v);
+    ok[i] = v;
   }
-  return sel;
+  return ok;
+}
+function decode(text) {
+  text = text || "";
+  let m = /ESC3:([0-9MN_\-]*)/.exec(text);
+  if (m) {
+    const parts = m[1] ? m[1].split("-") : [];
+    if (parts.length > N) return null;
+    const sel = emptySel();
+    for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === "_" ) continue;
+      const v = parsePart(STEPS[i].k, parts[i]);
+      if (v === undefined) return null;
+      sel[i] = v;
+    }
+    return validate(sel);
+  }
+  m = /ESC2:([0-9MN\-]*)/.exec(text);
+  if (m) { // lista da versão anterior: converte para a nova ordem
+    const parts = m[1] ? m[1].split("-").filter((x) => x !== "") : [];
+    if (parts.length > OLD_STEPS.length) return null;
+    const sel = emptySel();
+    const seen = {};
+    for (let i = 0; i < parts.length; i++) {
+      const os = OLD_STEPS[i];
+      const v = parsePart(os.k, parts[i]);
+      if (v === undefined) return null;
+      const key = os.p + os.k;
+      const nth = (seen[key] = (seen[key] || 0) + 1);
+      let cnt = 0, j = -1;
+      for (let x = 0; x < N; x++) if (STEPS[x].p === os.p && STEPS[x].k === os.k && ++cnt === nth) { j = x; break; }
+      if (j < 0) return null;
+      sel[j] = v;
+    }
+    return validate(sel);
+  }
+  return null;
 }
 
 function personLine(id, asg) {
@@ -420,31 +479,45 @@ function personLine(id, asg) {
   return s;
 }
 
-function stepLabel(st) {
-  if (st.k === "H12") return "escolher o dia e o turno de 12h";
-  if (st.k === "PL") return st.r === 1 ? "escolher o 1º PL" : "escolher o 2º PL";
-  return "escolher os 2 SA";
+// o que falta para a pessoa da vez
+function turnSteps(sel) {
+  const i = cur(sel);
+  if (i >= N) return [];
+  const p = STEPS[i].p;
+  const r = [];
+  for (let x = 0; x < N; x++) if (STEPS[x].p === p && sel[x] === null) r.push(x);
+  return r;
+}
+function stepLabel(st, sel) {
+  const rest = sel ? turnSteps(sel).map((x) => STEPS[x].k) : [st.k];
+  const pl = rest.filter((k) => k === "PL").length, sa = rest.filter((k) => k === "SA").length, h = rest.includes("H12");
+  const bits = [];
+  if (h) bits.push("o turno de 12h");
+  if (pl) bits.push(pl === 1 ? "1 PL" : pl + " PL");
+  if (sa) bits.push("2 SA");
+  return "escolher " + bits.join(" + ");
 }
 
 function whatsappText(sel) {
   const asg = assignments(sel);
-  const st = STEPS[sel.length];
+  const st = STEPS[cur(sel)];
   const lines = ["*ESCALA NATAL/RÉVEILLON – 23/12 a 01/01*", ""];
   PEOPLE.forEach((p) => lines.push(personLine(p.id, asg)));
   lines.push("");
-  lines.push(st ? "➡️ *Próximo(a): " + P[st.p].n + "* – " + stepLabel(st) : "✅ *Escala completa!*");
+  lines.push(st ? "➡️ *Próximo(a): " + P[st.p].n + "* – " + stepLabel(st, sel) : "✅ *Escala completa!*");
   lines.push("");
   lines.push(encode(sel));
   return lines.join("\n");
 }
 
-if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PEOPLE, P, STEPS, assignments, makeCtx, blockReason, feasible, options, encode, decode, whatsappText, stepLabel, openHalf };
+if (typeof module !== "undefined") module.exports = { N, cur, filled, emptySel, withStep, turnSteps, validate, OLD_STEPS, FEST_LIMIT, DAYS, FEST, PEOPLE, P, STEPS, assignments, makeCtx, blockReason, feasible, options, encode, decode, whatsappText, stepLabel, openHalf };
 
 </script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
   let sel = null;          // escolhas confirmadas (estado carregado)
+  let turnDone = [];       // etapas feitas nesta visita (vez atual)
   let pick = [];           // dias marcados na etapa atual
   let turno = null;        // MT/SN na rodada 0
   let justPicked = false;  // escolheu nesta visita
@@ -491,23 +564,25 @@ if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PE
       tr.appendChild(cell(sa, 2));
       tb.appendChild(tr);
     });
-    const pct = Math.round((sel.length / STEPS.length) * 100);
+    const pct = Math.round((filled(sel) / N) * 100);
     $("progBar").style.width = pct + "%";
-    $("progLbl").textContent = sel.length + " de " + STEPS.length + " escolhas feitas";
+    $("progLbl").textContent = filled(sel) + " de " + N + " escolhas feitas";
   }
 
   function renderTurn() {
-    const st = STEPS[sel.length];
+    const st = STEPS[cur(sel)];
     $("turnCard").classList.toggle("hidden", !st || justPicked);
     $("doneCard").classList.toggle("hidden", !!st || justPicked);
     $("copyCard").classList.toggle("hidden", !justPicked);
     if (!st || justPicked) return;
-    const rounds = ["Rodada 0 · turnos de 12h", "1ª rodada · 1º PL", "2ª rodada · 2º PL", "3ª rodada · sobreavisos"];
-    $("roundLbl").textContent = rounds[st.r];
+    const total = turnDone.length + turnSteps(sel).length;
+    $("roundLbl").textContent = total > 1 ? "Etapa " + (turnDone.length + 1) + " de " + total + " da sua vez" : "Sua vez";
     $("whoLbl").textContent = "Vez de: " + P[st.p].n;
     $("taskLbl").textContent = st.k === "H12"
       ? "Escolha o dia e o turno do seu plantão de 12h. Dias com um turno já escolhido por alguém mostram qual turno falta."
-      : st.k === "PL" ? (st.r === 1 ? "Escolha o dia do seu 1º PL (24h)." : "Escolha o dia do seu 2º PL (24h).")
+      : st.k === "PL" ? (STEPS.filter((x, j) => x.p === st.p && x.k === "PL").length > 1
+          ? (STEPS.findIndex((x, j) => x.p === st.p && x.k === "PL" && sel[j] === null) === STEPS.findIndex((x) => x.p === st.p && x.k === "PL") ? "Escolha o dia do seu 1º PL (24h)." : "Escolha o dia do seu 2º PL (24h).")
+          : "Escolha o dia do seu PL (24h).")
       : "Escolha os 2 dias de sobreaviso (" + pick.length + "/2).";
     $("turnoBox").classList.toggle("hidden", st.k !== "H12");
 
@@ -568,11 +643,11 @@ if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PE
   }
 
   function load(newSel) {
-    sel = newSel; pick = []; turno = null; justPicked = false;
+    sel = newSel; pick = []; turno = null; justPicked = false; turnDone = [];
     msg($("turnMsg"), "");
     msg($("copyMsg"), "");
     render();
-    const st = STEPS[sel.length];
+    const st = STEPS[cur(sel)];
     msg($("loadMsg"), st ? "Lista carregada. Agora é a vez de " + P[st.p].n + "." : "Lista carregada: escala completa.", "ok");
     $("turnCard").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -580,28 +655,33 @@ if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PE
   $("loadBtn").addEventListener("click", () => {
     const s = decode($("paste").value);
     if (!s) {
-      msg($("loadMsg"), "Não encontrei o código ESC2: na mensagem, ou ele está incompleto. Copie a mensagem inteira, até a última linha.", "err");
+      msg($("loadMsg"), "Não encontrei o código ESC3: (ou ESC2:) na mensagem, ou ele está incompleto. Copie a mensagem inteira, até a última linha.", "err");
       return;
     }
     load(s);
   });
-  $("startBtn").addEventListener("click", () => load([]));
+  $("startBtn").addEventListener("click", () => load(emptySel()));
 
   [...$("turnoBox").children].forEach((b) => b.addEventListener("click", () => { turno = b.dataset.t; renderTurn(); }));
 
   $("confirmBtn").addEventListener("click", () => {
-    const st = STEPS[sel.length];
+    const i = cur(sel);
+    const st = STEPS[i];
     let v;
     if (st.k === "H12") v = { d: pick[0], t: turno };
     else if (st.k === "PL") v = { d: pick[0] };
     else v = { d: pick.slice().sort((a, b) => a - b) };
     // confere de novo antes de gravar
-    const check = decode(encode(sel.concat([v])));
+    const check = validate(withStep(sel, i, v));
     if (!check) { msg($("turnMsg"), "Essa escolha não vale pelas regras. Escolha outro dia.", "err"); return; }
-    sel = sel.concat([v]);
-    pick = []; turno = null; justPicked = true;
+    sel = check;
+    turnDone.push(i);
+    pick = []; turno = null;
+    const next = STEPS[cur(sel)];
+    justPicked = !next || next.p !== st.p;
+    msg($("turnMsg"), justPicked ? "" : "Anotado! Agora a próxima etapa da sua vez.", "ok");
     render();
-    $("copyCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    (justPicked ? $("copyCard") : $("turnCard")).scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   function copyText(text, msgEl) {
@@ -625,7 +705,8 @@ if (typeof module !== "undefined") module.exports = { FEST_LIMIT, DAYS, FEST, PE
   $("copyBtn").addEventListener("click", () => copyText(whatsappText(sel), $("copyMsg")));
   $("copyFinalBtn").addEventListener("click", () => copyText(whatsappText(sel), $("copyFinalMsg")));
   $("undoBtn").addEventListener("click", () => {
-    sel = sel.slice(0, -1); justPicked = false; pick = []; turno = null;
+    turnDone.forEach((i) => { sel = withStep(sel, i, null); });
+    turnDone = []; justPicked = false; pick = []; turno = null;
     $("outText").classList.add("hidden");
     msg($("copyMsg"), "");
     render();
